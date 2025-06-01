@@ -1,7 +1,7 @@
 "use client";
 
 import Link from 'next/link';
-import { ShoppingBag, User, LogOut } from 'lucide-react';
+import { ShoppingBag, User, LogOut, X, Menu } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useCart } from "@/hooks/useCart";
@@ -17,10 +17,11 @@ export default function Navbar() {
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   useEffect(() => {
-    // Simplified useEffect: just get user state
-    supabase.auth.getUser().then(({ data }) => {
+    const fetchUser = async () => {
+      const { data } = await supabase.auth.getUser();
       setUser(data.user);
-    });
+    };
+    fetchUser();
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
     });
@@ -32,98 +33,98 @@ export default function Navbar() {
       try {
         await supabase.auth.signOut();
         setUser(null);
-        // setProfileMenu(false); // Removed
-        window.location.href = '/account'; // Redirect to account page (which will show login)
+        setIsMenuOpen(false); // Close menu on logout
+        window.location.href = '/account';
       } catch (error) {
         console.error("Error during logout:", error);
-        // Optionally, display an error to the user if logout fails
       }
     }
   };
 
-  // Removed handleProfileMenuToggle and useEffect for closing menu
+  const closeMenu = () => setIsMenuOpen(false);
 
   return (
-    <nav className="sticky top-0 bg-white shadow-md z-50 py-4 px-6 flex items-center">
-      <div className="flex items-center flex-shrink-0 space-x-8">
-        <Link href="/" className="flex items-center font-bold text-xl md:text-2xl">
-          <Image
-            src="/images/brand-logo.png"
-            alt="Brand Logo"
-            width={180}
-            height={180}
-            className="mr-2 object-contain"
-            priority
-          />
-        </Link>
-        <div className="hidden md:flex space-x-8 justify-center items-center flex-grow">
+    <nav className="sticky top-0 bg-white shadow-md z-50 py-4 px-6">
+      <div className="container mx-auto flex items-center justify-between">
+        <div className="flex items-center flex-shrink-0">
+          <Link href="/" className="flex items-center font-bold text-xl md:text-2xl" onClick={closeMenu}>
+            <Image
+              src="/images/brand-logo.png"
+              alt="Brand Logo"
+              width={180}
+              height={180}
+              className="mr-2 object-contain"
+              priority
+            />
+          </Link>
+        </div>
+
+        {/* Desktop Menu Links - Centered (or more to the left of icons) */}
+        <div className="hidden md:flex items-center space-x-8">
           <Link href="/shop" className="nav-link">
             Shop
           </Link>
+          {/* Add other desktop links here if needed */}
+        </div>
+
+        {/* Icons and Hamburger for Desktop/Mobile */}
+        <div className="flex items-center space-x-4">
+          <Link href="/account" className="hidden md:block hover:text-gray-600 transition-colors focus:outline-none" aria-label={user ? 'Open account page' : 'Sign in'}>
+            <User className="h-6 w-6" />
+          </Link>
+          <Link href="/cart" className="hidden md:block hover:text-gray-600 transition-colors relative">
+            <ShoppingBag className="h-6 w-6" />
+            {cartCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 bg-black text-white text-xs rounded-full">{cartCount}</span>
+            )}
+          </Link>
+          {user && (
+            <button
+              onClick={handleLogout}
+              className="hidden md:block hover:text-gray-600 transition-colors focus:outline-none"
+              aria-label="Logout"
+            >
+              <LogOut className="h-6 w-6" />
+            </button>
+          )}
+          {/* Hamburger Menu Button */}
+          <div className="md:hidden flex items-center">
+            <button
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="text-gray-600 hover:text-gray-800 focus:outline-none"
+              aria-label="Toggle menu"
+            >
+              {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="flex items-center space-x-4 flex-shrink-0 ml-auto">
-        {/* User icon now links directly to /account */}
-        <Link href="/account" className="hover:text-gray-600 transition-colors focus:outline-none" aria-label={user ? 'Open account page' : 'Sign in'}>
-          <User className="h-6 w-6" />
-        </Link>
-        
-        {/* Removed profileMenu dropdown */}
-
-        <Link href="/cart" className="hover:text-gray-600 transition-colors relative">
-          <ShoppingBag className="h-6 w-6" />
-          {cartCount > 0 && (
-            <span className="absolute top-0 right-0 flex items-center justify-center w-4 h-4 bg-black text-white text-xs rounded-full">{cartCount}</span>
-          )}
-        </Link>
-        {user && (
-          <button
-            onClick={handleLogout}
-            className="hover:text-gray-600 transition-colors focus:outline-none"
-            aria-label="Logout"
-          >
-            <LogOut className="h-6 w-6" />
-          </button>
-        )}
-      </div>
-
-      {/* Hamburger Menu */}
-      <div className="md:hidden flex items-center ml-auto">
-        <button
-          onClick={() => setIsMenuOpen(!isMenuOpen)}
-          className="text-gray-600 hover:text-gray-800 focus:outline-none"
-        >
-          <svg
-            className="h-6 w-6"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            {isMenuOpen ? (
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M6 18L18 6M6 6l12 12"
-              />
-            ) : (
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M4 6h16M4 12h16m-7 6h7"
-              />
-            )}
-          </svg>
-        </button>
-      </div>
-
-      {/* Mobile Menu */}
+      {/* Mobile Menu - Full width dropdown */}
       {isMenuOpen && (
-        <div className="absolute top-16 left-0 w-full bg-white shadow-md z-40 flex flex-col items-center space-y-4 py-4">
-          {/* Removed Collection/Shop link */}
+        <div className="md:hidden absolute top-full left-0 w-full bg-white shadow-lg z-40 flex flex-col items-start p-4 space-y-3">
+          <Link href="/shop" className="block w-full text-gray-700 hover:bg-gray-100 p-2 rounded" onClick={closeMenu}>
+            Shop
+          </Link>
+          <Link href="/account" className="block w-full text-gray-700 hover:bg-gray-100 p-2 rounded" onClick={closeMenu}>
+            {user ? 'Account' : 'Sign In / Sign Up'}
+          </Link>
+          <Link href="/cart" className="block w-full text-gray-700 hover:bg-gray-100 p-2 rounded relative" onClick={closeMenu}>
+            Cart
+            {cartCount > 0 && (
+              <span className="ml-2 inline-flex items-center justify-center w-5 h-5 bg-black text-white text-xs rounded-full">{/* Adjusted margin if needed if icons were to the left */}
+                {cartCount}
+              </span>
+            )}
+          </Link>
+          {user && (
+            <button
+              onClick={handleLogout} 
+              className="block w-full text-left text-red-600 hover:bg-gray-100 p-2 rounded"
+            >
+              Logout
+            </button>
+          )}
         </div>
       )}
 
