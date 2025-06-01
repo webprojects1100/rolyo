@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseUrl = process.env.MY_SUPA_URL;
+const supabaseKey = process.env.MY_SUPA_ANON_KEY;
 
 // TEMPORARY DEBUGGING: Log environment variables during build
 console.log('Build-time NEXT_PUBLIC_SUPABASE_URL:', supabaseUrl);
