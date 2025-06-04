@@ -3,12 +3,13 @@ import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import ProductPurchaseBox from '@/components/product/ProductPurchaseBox';
 
-interface ProductDetailsPageProps {
+export default async function ProductPage({
+  params,
+  // searchParams, // Intentionally commented out as it's not used, can be re-added if needed
+}: {
   params: { id: string };
-  searchParams?: { [key: string]: string | string[] | undefined };
-}
-
-export default async function ProductPage({ params }: ProductDetailsPageProps) {
+  searchParams?: { [key: string]: string | string[] | undefined }; // Kept for potential future use, but params is the key for the fix
+}) {
   const product = await fetchProductById(params.id);
   if (!product) return notFound();
 
