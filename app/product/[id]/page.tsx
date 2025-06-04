@@ -3,15 +3,12 @@ import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import ProductPurchaseBox from '@/components/product/ProductPurchaseBox';
 
-// interface SpecificProductDetailsPageProps {
-//   params: { id?: string };
-//   // searchParams?: { [key: string]: string | string[] | undefined };
-// }
+interface ProductDetailsPageProps {
+  params: { id: string };
+  searchParams?: { [key: string]: string | string[] | undefined };
+}
 
-// Using `any` for params as a temporary diagnostic step
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export default async function ProductPage({ params }: { params: any }) {
-  if (!params.id) return notFound();
+export default async function ProductPage({ params }: ProductDetailsPageProps) {
   const product = await fetchProductById(params.id);
   if (!product) return notFound();
 
