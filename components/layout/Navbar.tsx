@@ -1,7 +1,7 @@
 "use client";
 
 import Link from 'next/link';
-import { ShoppingBag, User, LogOut, X, Menu } from 'lucide-react';
+import { ShoppingBag, User, LogOut, X, Menu, Store } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useCart } from "@/hooks/useCart";
@@ -61,14 +61,17 @@ export default function Navbar() {
 
         {/* Desktop Menu Links - Centered (or more to the left of icons) */}
         <div className="hidden md:flex items-center space-x-8">
-          <Link href="/shop" className="nav-link">
-            Shop
-          </Link>
+          {/* <Link href="/shop" className="nav-link" aria-label="Shop">
+            <Store className="h-6 w-6" />
+          </Link> // Shop link moved */}
           {/* Add other desktop links here if needed */}
         </div>
 
         {/* Icons and Hamburger for Desktop/Mobile */}
         <div className="flex items-center space-x-4">
+          <Link href="/shop" className="hidden md:block hover:text-gray-600 transition-colors focus:outline-none nav-link" aria-label="Shop">
+            <Store className="h-6 w-6" />
+          </Link>
           <Link href="/account" className="hidden md:block hover:text-gray-600 transition-colors focus:outline-none" aria-label={user ? 'Open account page' : 'Sign in'}>
             <User className="h-6 w-6" />
           </Link>
