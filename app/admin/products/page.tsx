@@ -434,10 +434,19 @@ export default function AdminProductsPage() {
   }
 
   function getPublicImageUrl(path: string): string {
-    if (!path) return '';
-    if (path.startsWith('http') || path.startsWith('blob:') || path.startsWith('/')) return path;
-    const projectRef = process.env.NEXT_PUBLIC_SUPABASE_PROJECT_REF || '<your-project-ref>';
-    return `https://${projectRef}.supabase.co/storage/v1/object/public/product-images/${path}`;
+    if (!path) {
+      return '';
+    }
+    // If it's already a full URL (e.g., from a local file preview or an absolute URL somehow stored)
+    if (path.startsWith('http') || path.startsWith('blob:') || path.startsWith('/')) {
+      return path;
+    }
+    // Use Supabase's built-in method for generating public URLs
+    const { data } = supabase.storage.from('product-images').getPublicUrl(path);
+    
+    // data.publicUrl will be null if the object does not exist or if access is denied (e.g. RLS or file not public)
+    // However, for public buckets, it should generally return the URL.
+    return data?.publicUrl || ''; 
   }
 
   if (loading) return <div className="max-w-2xl mx-auto py-10 text-center">Loading...</div>;
