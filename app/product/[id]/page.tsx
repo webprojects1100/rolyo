@@ -11,6 +11,7 @@ export default async function ProductPage({
   searchParams?: Promise<{ [key: string]: string | string[] | undefined; }>; // Typed as Promise or undefined
 }) {
   const params = await paramsPromise; 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const searchParams = await searchParamsPromise; // Await searchParams
 
   // console.log(searchParams); // You can uncomment this to see if it has a value at runtime if needed
