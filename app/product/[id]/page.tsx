@@ -4,13 +4,17 @@ import { notFound } from 'next/navigation';
 import ProductPurchaseBox from '@/components/product/ProductPurchaseBox';
 
 export default async function ProductPage({
-  params: paramsPromise, // Renamed to indicate it's a promise
-  // searchParams, // Intentionally commented out as it's not used, can be re-added if needed
+  params: paramsPromise, 
+  searchParams: searchParamsPromise, // Renamed and will be awaited
 }: {
-  params: Promise<{ id: string }>; // Explicitly type as a Promise
-  searchParams?: { [key: string]: string | string[] | undefined }; // Kept for potential future use
+  params: Promise<{ id: string }>; 
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined; }>; // Typed as Promise or undefined
 }) {
-  const params = await paramsPromise; // Await the params
+  const params = await paramsPromise; 
+  const searchParams = await searchParamsPromise; // Await searchParams
+
+  // console.log(searchParams); // You can uncomment this to see if it has a value at runtime if needed
+
   const product = await fetchProductById(params.id);
   if (!product) return notFound();
 
