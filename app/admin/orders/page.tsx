@@ -36,6 +36,14 @@ interface Order extends RawSupabaseOrder {
   totalAmount: number; 
 }
 
+const ORDER_STATUSES = [
+  { value: "pending", label: "Pending" },
+  { value: "processing", label: "Processing" },
+  { value: "shipped", label: "Shipped" },
+  { value: "delivered", label: "Delivered" },
+  { value: "cancelled", label: "Cancelled" },
+];
+
 export default function AdminOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [admin, setAdmin] = useState(false);
@@ -43,6 +51,8 @@ export default function AdminOrdersPage() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [updatingStatusOrderId, setUpdatingStatusOrderId] = useState<string | null>(null);
+  const [updateError, setUpdateError] = useState<string | null>(null);
 
   async function fetchOrders() {
     try {
@@ -123,6 +133,36 @@ export default function AdminOrdersPage() {
     setSelectedOrder(null);
   };
 
+  const handleUpdateOrderStatus = async (orderId: string, newStatus: string) => {
+    setUpdatingStatusOrderId(orderId);
+    setUpdateError(null);
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: newStatus })
+        .eq('id', orderId);
+
+      if (error) {
+        console.error('Error updating order status:', error);
+        setUpdateError(`Failed to update status for order ${orderId.substring(0,8)}: ${error.message}`);
+        setUpdatingStatusOrderId(null);
+        return;
+      }
+
+      setOrders(prevOrders =>
+        prevOrders.map(order =>
+          order.id === orderId ? { ...order, status: newStatus } : order
+        )
+      );
+      // Optionally, show a success message/toast here
+    } catch (err) {
+      console.error('Unexpected error updating status:', err);
+      setUpdateError(err instanceof Error ? err.message : 'An unknown error occurred during status update.');
+    } finally {
+      setUpdatingStatusOrderId(null);
+    }
+  };
+
   if (loading) return <div className="max-w-2xl mx-auto py-10 text-center">Loading...</div>;
   if (!admin) return <div className="max-w-2xl mx-auto py-10 text-center text-red-600 font-bold">Access Denied: Admins Only</div>;
 
@@ -132,8 +172,14 @@ export default function AdminOrdersPage() {
       
       {fetchError && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
-          <strong className="font-bold">Error: </strong>
+          <strong className="font-bold\">Error fetching orders: </strong>
           <span className="block sm:inline">{fetchError}</span>
+        </div>
+      )}
+      {updateError && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4 mt-2" role="alert">
+          <strong className="font-bold\">Update Error: </strong>
+          <span className="block sm:inline">{updateError}</span>
         </div>
       )}
 
@@ -147,36 +193,50 @@ export default function AdminOrdersPage() {
             <thead>
               <tr className="bg-gray-100">
                 <th className="p-3 border text-left text-sm font-semibold text-gray-700">Order ID</th>
-                <th className="p-3 border text-left text-sm font-semibold text-gray-700">Customer</th>
-                <th className="p-3 border text-left text-sm font-semibold text-gray-700">Phone</th>
-                <th className="p-3 border text-left text-sm font-semibold text-gray-700">Order Date</th>
-                <th className="p-3 border text-right text-sm font-semibold text-gray-700">Total</th>
-                <th className="p-3 border text-left text-sm font-semibold text-gray-700">Status</th>
+                <th className="p-3 border text-left text-sm font-semibold text-gray-700\">Customer</th>
+                <th className="p-3 border text-left text-sm font-semibold text-gray-700\">Phone</th>
+                <th className="p-3 border text-left text-sm font-semibold text-gray-700\">Order Date</th>
+                <th className="p-3 border text-right text-sm font-semibold text-gray-700\">Total</th>
+                <th className="p-3 border text-left text-sm font-semibold text-gray-700 min-w-[150px]">Status</th>
                 <th className="p-3 border text-left text-sm font-semibold text-gray-700">Actions</th>
               </tr>
             </thead>
             <tbody>
               {orders.map((order) => (
                 <tr key={order.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="p-3 border text-xs text-gray-600">{order.id}</td>
+                  <td className="p-3 border text-xs text-gray-600">{order.id.substring(0,8)}...</td>
                   <td className="p-3 border text-sm text-gray-800">{order.shipping?.name || 'N/A'}</td>
                   <td className="p-3 border text-sm text-gray-600">{order.shipping?.phone || 'N/A'}</td>
                   <td className="p-3 border text-sm text-gray-600">{new Date(order.created_at).toLocaleString()}</td>
                   <td className="p-3 border text-sm text-gray-800 text-right">₱{order.totalAmount.toFixed(2)}</td>
                   <td className="p-3 border text-sm">
-                    <span className={`px-2 py-1 text-xs font-semibold rounded-full 
-                      ${order.status === 'pending' ? 'bg-yellow-200 text-yellow-800' : 
-                        order.status === 'processing' ? 'bg-indigo-200 text-indigo-800' :
-                        order.status === 'shipped' ? 'bg-blue-200 text-blue-800' : 
-                        order.status === 'delivered' ? 'bg-green-200 text-green-800' : 
-                        order.status === 'cancelled' ? 'bg-red-200 text-red-800' : 'bg-gray-200 text-gray-800'}
-                    `}>
-                      {order.status}
-                    </span>
+                    <select
+                      value={order.status}
+                      onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value)}
+                      disabled={updatingStatusOrderId === order.id}
+                      className={`border rounded px-2 py-1 text-sm w-full focus:ring-indigo-500 focus:border-indigo-500
+                        ${order.status === 'pending' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' : 
+                          order.status === 'processing' ? 'bg-indigo-100 text-indigo-800 border-indigo-300' :
+                          order.status === 'shipped' ? 'bg-blue-100 text-blue-800 border-blue-300' : 
+                          order.status === 'delivered' ? 'bg-green-100 text-green-800 border-green-300' : 
+                          order.status === 'cancelled' ? 'bg-red-100 text-red-800 border-red-300' : 'bg-gray-100 text-gray-800 border-gray-300'}
+                      `}
+                    >
+                      {ORDER_STATUSES.map(statusOption => (
+                        <option key={statusOption.value} value={statusOption.value}>
+                          {statusOption.label}
+                        </option>
+                      ))}
+                    </select>
+                    {updatingStatusOrderId === order.id && <span className="text-xs ml-2">Updating...</span>}
                   </td>
                   <td className="p-3 border text-sm">
-                    <button onClick={() => handleViewDetails(order)} className="text-blue-600 hover:underline mr-2 text-xs">View Details</button>
-                    <button className="text-green-600 hover:underline text-xs">Update Status</button>
+                    <button 
+                      onClick={() => handleViewDetails(order)} 
+                      className="text-blue-600 hover:underline text-xs"
+                    >
+                      View Details
+                    </button>
                   </td>
                 </tr>
               ))}
