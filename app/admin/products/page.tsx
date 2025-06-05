@@ -252,12 +252,14 @@ export default function AdminProductsPage() {
     setEditImageUploadError("");
     if (!e.target.files) return;
     const files = Array.from(e.target.files);
-    if (editImages.filter(img => !img.file).length + files.length > 3) {
+
+    if (editImages.length + files.length > 3) {
         setEditImageUploadError('You can have up to 3 images in total.');
+        e.target.value = "";
         return;
     }
     
-    const newImageFiles = files.map(f => {
+    const newImageObjects = files.map(f => {
       let blobUrl = '';
       try {
         blobUrl = URL.createObjectURL(f);
@@ -266,17 +268,22 @@ export default function AdminProductsPage() {
       }
       
       return {
-        url: blobUrl || '', // Use empty string as fallback if URL creation fails
+        url: blobUrl || '',
         file: f,
         id: undefined,
         dbPath: undefined
       };
-    }).filter(item => item.url); // Only keep items where URL creation succeeded
+    }).filter(item => item.url);
     
-    setEditImages(prev => [...prev.filter(img => !img.file), ...newImageFiles].slice(0, 3)); 
+    setEditImages(prev => [...prev, ...newImageObjects].slice(0, 3)); 
+    e.target.value = "";
   }
 
   function handleRemoveEditImage(idx: number) {
+    const imageToRemove = editImages[idx];
+    if (imageToRemove && imageToRemove.file && imageToRemove.url.startsWith('blob:')) {
+      URL.revokeObjectURL(imageToRemove.url);
+    }
     setEditImages(prev => prev.filter((_, i) => i !== idx));
     setEditImageUploadError("");
   }
