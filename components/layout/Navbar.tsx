@@ -42,68 +42,76 @@ export default function Navbar() {
   };
 
   const closeMenu = () => setIsMenuOpen(false);
+  const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
+
+  // Define logo component for reuse
+  const Logo = () => (
+    <Link href="/" className="flex items-center font-bold text-xl md:text-2xl" onClick={isMenuOpen ? closeMenu : undefined}>
+      <Image
+        src="/images/brand-logo.png"
+        alt="Brand Logo"
+        width={180}
+        height={180}
+        className="mr-2 object-contain"
+        priority
+      />
+    </Link>
+  );
+
+  // Define desktop icons component for reuse
+  const DesktopIcons = () => (
+    <div className="flex items-center justify-center space-x-5 md:space-x-6">
+      <Link href="/shop" className="hover:text-gray-600 transition-colors focus:outline-none nav-link" aria-label="Shop">
+        <Store className="h-6 w-6" />
+      </Link>
+      <Link href="/account" className="hover:text-gray-600 transition-colors focus:outline-none" aria-label={user ? 'Open account page' : 'Sign in'}>
+        <User className="h-6 w-6" />
+      </Link>
+      <Link href="/cart" className="hover:text-gray-600 transition-colors relative">
+        <ShoppingBag className="h-6 w-6" />
+        {cartCount > 0 && (
+          <span className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 bg-black text-white text-xs rounded-full">{cartCount}</span>
+        )}
+      </Link>
+      {user && (
+        <button
+          onClick={handleLogout}
+          className="hover:text-gray-600 transition-colors focus:outline-none"
+          aria-label="Logout"
+        >
+          <LogOut className="h-6 w-6" />
+        </button>
+      )}
+    </div>
+  );
 
   return (
-    <nav className="sticky top-0 bg-white shadow-md z-50 py-4 px-6">
-      <div className="container mx-auto flex items-center justify-between">
+    <nav className="sticky top-0 bg-white shadow-md z-50 py-4">
+      {/* Mobile Header (logo left, hamburger right) */}
+      <div className="container mx-auto flex items-center justify-between px-6 md:hidden">
         <div className="flex items-center flex-shrink-0">
-          <Link href="/" className="flex items-center font-bold text-xl md:text-2xl" onClick={closeMenu}>
-            <Image
-              src="/images/brand-logo.png"
-              alt="Brand Logo"
-              width={180}
-              height={180}
-              className="mr-2 object-contain"
-              priority
-            />
-          </Link>
+          <Logo />
         </div>
-
-        {/* Desktop Menu Links - Centered (or more to the left of icons) */}
-        <div className="hidden md:flex items-center space-x-8">
-          {/* <Link href="/shop" className="nav-link" aria-label="Shop">
-            <Store className="h-6 w-6" />
-          </Link> // Shop link moved */}
-          {/* Add other desktop links here if needed */}
-        </div>
-
-        {/* Icons and Hamburger for Desktop/Mobile */}
-        <div className="flex items-center space-x-4">
-          <Link href="/shop" className="hidden md:block hover:text-gray-600 transition-colors focus:outline-none nav-link" aria-label="Shop">
-            <Store className="h-6 w-6" />
-          </Link>
-          <Link href="/account" className="hidden md:block hover:text-gray-600 transition-colors focus:outline-none" aria-label={user ? 'Open account page' : 'Sign in'}>
-            <User className="h-6 w-6" />
-          </Link>
-          <Link href="/cart" className="hidden md:block hover:text-gray-600 transition-colors relative">
-            <ShoppingBag className="h-6 w-6" />
-            {cartCount > 0 && (
-              <span className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 bg-black text-white text-xs rounded-full">{cartCount}</span>
-            )}
-          </Link>
-          {user && (
-            <button
-              onClick={handleLogout}
-              className="hidden md:block hover:text-gray-600 transition-colors focus:outline-none"
-              aria-label="Logout"
-            >
-              <LogOut className="h-6 w-6" />
-            </button>
-          )}
-          {/* Hamburger Menu Button */}
-          <div className="md:hidden flex items-center">
-            <button
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="text-gray-600 hover:text-gray-800 focus:outline-none"
-              aria-label="Toggle menu"
-            >
-              {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-            </button>
-          </div>
+        <div className="flex items-center">
+          <button
+            onClick={toggleMenu}
+            className="text-gray-600 hover:text-gray-800 focus:outline-none"
+            aria-label="Toggle menu"
+          >
+            {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          </button>
         </div>
       </div>
 
-      {/* Mobile Menu - Full width dropdown */}
+      {/* Desktop Header (logo centered, icons below and centered) */}
+      <div className="hidden md:flex flex-col items-center container mx-auto px-6">
+        <div className="flex justify-center w-full mb-3"> {/* Increased bottom margin slightly */} 
+          <Logo />
+        </div>
+        <DesktopIcons />
+      </div>
+
+      {/* Mobile Menu Dropdown (Full width) */}
       {isMenuOpen && (
         <div className="md:hidden absolute top-full left-0 w-full bg-white shadow-lg z-40 flex flex-col items-start p-4 space-y-3">
           <Link href="/shop" className="block w-full text-gray-700 hover:bg-gray-100 p-2 rounded" onClick={closeMenu}>
@@ -115,7 +123,7 @@ export default function Navbar() {
           <Link href="/cart" className="block w-full text-gray-700 hover:bg-gray-100 p-2 rounded relative" onClick={closeMenu}>
             Cart
             {cartCount > 0 && (
-              <span className="ml-2 inline-flex items-center justify-center w-5 h-5 bg-black text-white text-xs rounded-full">{/* Adjusted margin if needed if icons were to the left */}
+              <span className="ml-2 inline-flex items-center justify-center w-5 h-5 bg-black text-white text-xs rounded-full">
                 {cartCount}
               </span>
             )}
@@ -135,9 +143,8 @@ export default function Navbar() {
         .nav-link {
           position: relative;
           display: inline-block;
-          padding-bottom: 4px;
+          padding-bottom: 4px; /* For the underline effect */
         }
-
         .nav-link::after {
           content: '';
           position: absolute;
@@ -148,7 +155,6 @@ export default function Navbar() {
           background-color: currentColor;
           transition: width 0.3s ease;
         }
-
         .nav-link:hover::after {
           width: 100%;
         }
