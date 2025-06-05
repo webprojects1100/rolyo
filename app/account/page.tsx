@@ -271,8 +271,8 @@ export default function UserDashboard() {
       {isAdminUser && (
         <div className="mb-6">
           <Link 
-            href="/admin/products" 
-            className="inline-block bg-blue-600 text-white rounded px-6 py-3 font-semibold hover:bg-blue-700 transition shadow-md"
+            href="/admin"
+            className="inline-block bg-indigo-600 text-white rounded px-6 py-3 font-semibold hover:bg-indigo-700 transition shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50"
           >
             Go to Admin Dashboard
           </Link>
