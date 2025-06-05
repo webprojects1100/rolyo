@@ -4,6 +4,7 @@ export const ShippingSchema = z.object({
   name: z.string().min(2).max(100),
   address: z.string().min(5).max(200),
   phone: z.string().min(7).max(20),
+  postalCode: z.string().min(1).max(20),
 });
 
 export const CartItemSchema = z.object({
