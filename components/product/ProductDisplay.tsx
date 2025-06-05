@@ -45,7 +45,7 @@ export default function ProductDisplay({ product }: ProductDisplayProps) {
       {/* Image Gallery Section */}
       <div className="w-full md:w-1/2 flex flex-col items-center mb-8 md:mb-0 md:sticky md:top-24">
         {/* Main Image */}
-        <div className="w-full aspect-square bg-gray-100 rounded-2xl flex items-center justify-center overflow-hidden mb-4">
+        <div className="w-full aspect-square bg-white rounded-2xl flex items-center justify-center overflow-hidden mb-4">
           {selectedImageUrl ? (
             <Image
               src={selectedImageUrl}
