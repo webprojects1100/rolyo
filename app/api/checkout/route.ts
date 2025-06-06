@@ -42,6 +42,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Authentication error' }, { status: 500 });
   }
 
+  if (!user) {
+    return NextResponse.json({ error: 'You must be logged in to place an order.' }, { status: 401 });
+  }
+
   if (!cart || cart.length === 0) {
     return NextResponse.json({ error: 'Cart is empty' }, { status: 400 });
   }
