@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { z } from 'zod';
 import { isAdmin } from "@/lib/utils";
 import Link from 'next/link';
-import { useAuth } from "@/contexts/AuthContext"; 
+import { useAuth } from "../../contexts/AuthContext"; 
 
 const signupSchema = z.object({
   email: z.string().email('Invalid email'),
