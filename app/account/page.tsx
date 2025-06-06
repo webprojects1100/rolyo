@@ -1,10 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import type { User } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { isAdmin } from "@/lib/utils";
 import Link from 'next/link';
+import { useAuth } from "@/contexts/AuthContext"; 
 
 const signupSchema = z.object({
   email: z.string().email('Invalid email'),
@@ -12,7 +12,7 @@ const signupSchema = z.object({
 });
 
 export default function UserDashboard() {
-  const [user, setUser] = useState<User | null>(null);
+  const { user, loading: authLoading } = useAuth();
   const [orders, setOrders] = useState<{ id: string; created_at: string; status: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState('');
@@ -43,46 +43,52 @@ export default function UserDashboard() {
   const [isEditingProfile, setIsEditingProfile] = useState(false);
 
   useEffect(() => {
-    async function fetchUserAndProfileData() {
-      setLoading(true);
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      setUser(authUser);
-      if (authUser) {
+    async function fetchProfileAndOrders() {
+      if (user) {
+        setLoading(true);
+        
         // Check if user is admin
-        const adminStatus = await isAdmin(authUser.id);
+        const adminStatus = await isAdmin(user.id);
         setIsAdminUser(adminStatus);
 
-        // Fetch profile data with new fields
+        // Fetch profile data
         const { data: profileData, error: profileFetchError } = await supabase
           .from('profiles')
           .select('name, address, phone, postalCode')
-          .eq('id', authUser.id)
+          .eq('id', user.id)
           .single();
 
         if (profileData) {
           setProfile(profileData);
         }
-        if (profileFetchError && profileFetchError.code !== 'PGRST116') { // PGRST116: no rows found, which is fine
+        if (profileFetchError && profileFetchError.code !== 'PGRST116') {
           console.error('Error fetching profile:', profileFetchError);
-          // Check if profileFetchError has a message property before accessing it
-          const errorMessage = typeof profileFetchError === 'object' && profileFetchError !== null && 'message' in profileFetchError 
-            ? (profileFetchError as { message: string }).message 
-            : 'Could not load profile data due to an unexpected error.';
-          setProfileError(errorMessage);
+          setProfileError('Could not load profile data.');
         }
 
         // Fetch orders for this user
-        const { data: ordersData } = await supabase
+        const { data: ordersData, error: ordersError } = await supabase
           .from("orders")
-          .select("id, created_at, status") // Specify columns
-          .eq('user_id', authUser.id) // Assuming you have a user_id column in orders
+          .select("id, created_at, status")
+          .eq('user_id', user.id)
           .order("created_at", { ascending: false });
-        setOrders(ordersData || []);
+
+        if (ordersError) {
+          console.error('Error fetching orders:', ordersError);
+          // Handle order fetch error if needed
+        } else {
+          setOrders(ordersData || []);
+        }
+        setLoading(false);
+      } else {
+        if (!authLoading) {
+          setLoading(false);
+        }
       }
-      setLoading(false);
     }
-    fetchUserAndProfileData();
-  }, []);
+
+    fetchProfileAndOrders();
+  }, [user, authLoading]);
 
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,7 +124,7 @@ export default function UserDashboard() {
     setProfileLoading(false);
   };
 
-  if (loading) return <div className="max-w-2xl mx-auto py-10 text-center">Loading...</div>;
+  if (authLoading || loading) return <div className="max-w-2xl mx-auto py-10 text-center">Loading...</div>;
   if (!user) return (
     <div className="max-w-2xl mx-auto py-10 text-center">
       {showSignup ? (
