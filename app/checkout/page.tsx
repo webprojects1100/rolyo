@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import type { User } from '@supabase/supabase-js';
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function CheckoutPage() {
   const { cart, clearCart } = useCart();
@@ -17,21 +17,19 @@ export default function CheckoutPage() {
   const [placingOrder, setPlacingOrder] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [user, setUser] = useState<User | null>(null);
+  const { user, loading: authLoading } = useAuth();
   const [profileLoading, setProfileLoading] = useState(true);
 
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
   useEffect(() => {
-    async function fetchUserAndProfile() {
-      setProfileLoading(true);
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      setUser(authUser);
-      if (authUser) {
+    async function fetchProfile() {
+      if (user) {
+        setProfileLoading(true);
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
           .select('name, address, phone, postalCode')
-          .eq('id', authUser.id)
+          .eq('id', user.id)
           .single();
         
         if (profileData) {
@@ -46,11 +44,18 @@ export default function CheckoutPage() {
         if (profileError && profileError.code !== 'PGRST116') {
           console.error("Error fetching profile for checkout:", profileError);
         }
+        setProfileLoading(false);
+      } else {
+        // If there's no user, we are not loading a profile.
+        setProfileLoading(false);
       }
-      setProfileLoading(false);
     }
-    fetchUserAndProfile();
-  }, []);
+
+    // Fetch profile only when auth is done loading and we have a user.
+    if (!authLoading) {
+      fetchProfile();
+    }
+  }, [user, authLoading]);
 
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     setShipping({ ...shipping, [e.target.name]: e.target.value });
@@ -63,7 +68,7 @@ export default function CheckoutPage() {
       const res = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cart, shipping }),
+        body: JSON.stringify({ cart, shipping, user }),
       });
       const result = await res.json();
       if (!res.ok) {
@@ -103,7 +108,7 @@ export default function CheckoutPage() {
             </Link>
           )}
         </div>
-        {profileLoading ? (
+        {profileLoading || authLoading ? (
           <div>Loading shipping information...</div>
         ) : (
           <div className="flex flex-col gap-3">
@@ -140,7 +145,7 @@ export default function CheckoutPage() {
       <button
         className="bg-black text-white px-6 py-2 rounded-xl w-full disabled:opacity-60"
         onClick={handlePlaceOrder}
-        disabled={profileLoading || placingOrder || cart.length === 0 || !shipping.name || !shipping.address || !shipping.phone || !shipping.postalCode}
+        disabled={profileLoading || authLoading || placingOrder || cart.length === 0 || !shipping.name || !shipping.address || !shipping.phone || !shipping.postalCode}
       >
         {placingOrder ? "Placing Order..." : "Place Order"}
       </button>
