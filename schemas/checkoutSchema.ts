@@ -20,4 +20,7 @@ export const CartItemSchema = z.object({
 export const CheckoutSchema = z.object({
   shipping: ShippingSchema,
   cart: z.array(CartItemSchema).min(1),
+  user: z.object({
+    id: z.string(),
+  }),
 });
