@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import '@/styles/globals.css';  // Adjusted import to reflect new location of globals.css
 import Navbar from '@/components/layout/Navbar';
 import { CartProvider } from '@/hooks/useCart';
+import { AuthProvider } from '@/contexts/AuthContext';
 import Footer from '@/components/layout/Footer'; // Importing Footer component
 
 const geistSans = Geist({
@@ -31,9 +32,11 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-white text-gray-900`}
       >
         <CartProvider>
-          <Navbar />
-          {children}
-          <Footer /> {/* Footer component added back to the layout */}
+          <AuthProvider>
+            <Navbar />
+            {children}
+            <Footer />
+          </AuthProvider>
         </CartProvider>
       </body>
     </html>
