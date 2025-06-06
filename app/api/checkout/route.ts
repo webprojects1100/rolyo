@@ -33,14 +33,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Malformed request' }, { status: 400 });
   }
   // Now shipping and cart will have types inferred from CheckoutSchema
-  const { cart, shipping }: { cart: CartItem[], shipping: ShippingInfo } = parsedRequestData.data;
-
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-  if (authError) {
-    console.error("Supabase auth error:", authError);
-    return NextResponse.json({ error: 'Authentication error' }, { status: 500 });
-  }
+  const { cart, shipping, user }: { cart: CartItem[], shipping: ShippingInfo, user: { id: string } } = parsedRequestData.data;
 
   if (!user) {
     return NextResponse.json({ error: 'You must be logged in to place an order.' }, { status: 401 });
