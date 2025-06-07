@@ -12,6 +12,7 @@ interface ProductDetail {
   price: number;
   images?: string[] | null;       // Array of image URLs
   sizes?: { size: string; stock: number; id?: string }[] | null; // id for sizes is optional, as seen in Admin page
+  colors?: { name: string; hex: string; id?: string }[] | null;
   // Add any other relevant product fields that ProductPurchaseBox or this component might need
 }
 
@@ -21,12 +22,16 @@ interface ProductDisplayProps {
 
 export default function ProductDisplay({ product }: ProductDisplayProps) {
   const [selectedImageUrl, setSelectedImageUrl] = useState<string>("");
+  const [selectedColor, setSelectedColor] = useState<{ name: string; hex: string; id?: string } | null>(null);
 
   useEffect(() => {
     if (product && product.images && product.images.length > 0) {
       setSelectedImageUrl(product.images[0]); // First image is the default
     } else {
       setSelectedImageUrl(""); // Fallback for no images
+    }
+    if (product && product.colors && product.colors.length > 0) {
+      setSelectedColor(product.colors[0]);
     }
   }, [product]);
 
@@ -94,6 +99,21 @@ export default function ProductDisplay({ product }: ProductDisplayProps) {
         <h1 className="text-3xl font-bold mb-2">{product.name}</h1>
         <p className="text-gray-700 mb-4 whitespace-pre-line">{product.description || "No description available."}</p>
         <p className="text-2xl font-semibold mb-6">₱{product.price.toFixed(2)}</p>
+
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold mb-2">Color</h3>
+          <div className="flex gap-2">
+            {(product.colors || []).map((color) => (
+              <button
+                key={color.id}
+                onClick={() => setSelectedColor(color)}
+                className={`w-8 h-8 rounded-full border-2 transition-all ${selectedColor?.id === color.id ? 'ring-2 ring-offset-2 ring-black' : 'border-gray-300'}`}
+                style={{ backgroundColor: color.hex }}
+                aria-label={`Select color ${color.name}`}
+              ></button>
+            ))}
+          </div>
+        </div>
         
         {product.id && (
            <ProductPurchaseBox
@@ -102,6 +122,7 @@ export default function ProductDisplay({ product }: ProductDisplayProps) {
              price={product.price}
              imageUrl={selectedImageUrl || (displayImages.length > 0 ? displayImages[0] : '')}
              sizes={product.sizes || []}
+             selectedColor={selectedColor}
            />
         )}
       </div>
