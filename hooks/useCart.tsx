@@ -10,13 +10,14 @@ export interface CartItem {
   size: string;
   quantity: number;
   stock: number;
+  color?: string;
 }
 
 interface CartContextType {
   cart: CartItem[];
   addToCart: (item: CartItem) => void;
-  removeFromCart: (id: string, size: string) => void;
-  updateQuantity: (id: string, size: string, quantity: number) => void;
+  removeFromCart: (id: string, size: string, color?: string) => void;
+  updateQuantity: (id: string, size: string, quantity: number, color?: string) => void;
   clearCart: () => void; // Add clearCart to context type
 }
 
@@ -37,11 +38,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const addToCart = (item: CartItem) => {
     setCart((prev) => {
       const existing = prev.find(
-        (i) => i.id === item.id && i.size === item.size
+        (i) => i.id === item.id && i.size === item.size && i.color === item.color
       );
       if (existing) {
         return prev.map((i) =>
-          i.id === item.id && i.size === item.size
+          i.id === item.id && i.size === item.size && i.color === item.color
             ? { ...i, quantity: i.quantity + item.quantity }
             : i
         );
@@ -51,14 +52,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  const removeFromCart = (id: string, size: string) => {
-    setCart((prev) => prev.filter((item) => !(item.id === id && item.size === size)));
+  const removeFromCart = (id: string, size: string, color?: string) => {
+    setCart((prev) => prev.filter((item) => !(item.id === id && item.size === size && item.color === color)));
   };
 
-  const updateQuantity = (id: string, size: string, quantity: number) => {
+  const updateQuantity = (id: string, size: string, quantity: number, color?: string) => {
     setCart((prev) =>
       prev.map((item) =>
-        item.id === id && item.size === size ? { ...item, quantity: Math.max(1, quantity) } : item
+        item.id === id && item.size === size && item.color === color ? { ...item, quantity: Math.max(1, quantity) } : item
       )
     );
   };
