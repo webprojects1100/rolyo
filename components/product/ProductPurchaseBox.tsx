@@ -8,6 +8,7 @@ interface ProductPurchaseBoxProps {
   price: number;
   imageUrl: string;
   sizes: { size: string; stock: number }[];
+  selectedColor: { name: string; hex: string; id?: string } | null;
 }
 
 const SIZE_LABELS: Record<string, string> = {
@@ -21,7 +22,7 @@ const SIZE_LABELS: Record<string, string> = {
   "XXXXL": "4X-LARGE",
 };
 
-export default function ProductPurchaseBox({ id, name, price, imageUrl, sizes }: ProductPurchaseBoxProps) {
+export default function ProductPurchaseBox({ id, name, price, imageUrl, sizes, selectedColor }: ProductPurchaseBoxProps) {
   const [selectedSize, setSelectedSize] = useState<string>(sizes[0]?.size || "");
   const [quantity, setQuantity] = useState<number>(1);
   const { addToCart } = useCart();
@@ -56,6 +57,7 @@ export default function ProductPurchaseBox({ id, name, price, imageUrl, sizes }:
       size: selectedSize,
       quantity,
       stock: selectedStock,
+      color: selectedColor?.name || '',
     });
     setShowToast(true);
     setTimeout(() => setShowToast(false), 2000);
@@ -63,6 +65,7 @@ export default function ProductPurchaseBox({ id, name, price, imageUrl, sizes }:
 
   return (
     <div className="w-full">
+      <div className="mb-2 text-sm font-medium">Color: {selectedColor?.name || 'Not selected'}</div>
       <div className="mb-2 text-sm font-medium">Size: {SIZE_LABELS[selectedSize] || selectedSize}</div>
       <div className="flex flex-wrap gap-2 mb-6">
         {sizes.map(({ size, stock }) => (
