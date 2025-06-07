@@ -146,7 +146,8 @@ export async function fetchProductById(id: string) {
       description,
       price,
       images (image_url, position),
-      sizes (size, stock)
+      sizes (size, stock),
+      colors (name, hex)
     `)
     .eq('id', id)
     .single();
@@ -179,6 +180,7 @@ export async function fetchProductById(id: string) {
       size: s.size,
       stock: s.stock
     })) || [],
+    colors: data.colors || [],
   };
 }
 
@@ -191,7 +193,8 @@ export async function fetchArchivedProductById(id: string) {
       description,
       price,
       images (image_url, position),
-      sizes (size)
+      sizes (size),
+      colors (name, hex)
     `)
     .eq('id', id)
     .eq('status', 'archive')
@@ -214,5 +217,6 @@ export async function fetchArchivedProductById(id: string) {
     sizes: data.sizes?.map((s: { size: string }) => ({
       size: s.size
     })) || [],
+    colors: data.colors || [],
   };
 }
