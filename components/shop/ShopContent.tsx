@@ -1,9 +1,9 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Product } from "@/lib/queries"; // Assuming Product type is exported from queries
+import { ProductListItem } from "@/lib/queries"; // Assuming Product type is exported from queries
 
 interface ShopContentProps {
-  products: Product[];
+  products: ProductListItem[];
 }
 
 export default function ShopContent({ products }: ShopContentProps) {
