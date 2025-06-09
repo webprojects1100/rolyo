@@ -271,8 +271,9 @@ export default function AdminProductsPage() {
         resetForm();
         await fetchProducts();
 
-    } catch (error: any) {
-        setFormError(`Failed to create product: ${error.message}`);
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+        setFormError(`Failed to create product: ${errorMessage}`);
         // TODO: Add cleanup logic here if product creation fails midway, e.g., delete uploaded images or the product entry.
     } finally {
         setFormLoading(false);
