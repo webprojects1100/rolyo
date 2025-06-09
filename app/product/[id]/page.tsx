@@ -5,10 +5,11 @@ import { notFound } from 'next/navigation';
 import ProductDisplay from '@/components/product/ProductDisplay'; // Import the new client component
 
 export default async function ProductPage({
-  params,
+  params: paramsPromise,
 }: {
-  params: { id: string }; 
+  params: Promise<{ id: string }>; 
 }) {
+  const params = await paramsPromise;
   const product = await fetchProductById(params.id);
 
   if (!product) {
