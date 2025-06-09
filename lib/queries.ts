@@ -223,6 +223,7 @@ export async function fetchProductById(id: string): Promise<ProductDetails | nul
 // The fetchArchivedProductById function is now obsolete with the new status check,
 // but we will leave it for now to avoid breaking other parts of the app.
 // It should be updated or removed later.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function fetchArchivedProductById(_id: string) {
   console.warn("fetchArchivedProductById is disabled.");
   return null;
