@@ -1,15 +1,14 @@
 "use client";
 
 import Link from 'next/link';
-import { ShoppingBag, User, LogOut, Store, Shield } from 'lucide-react';
+import { ShoppingBag, User, LogOut, Store } from 'lucide-react';
 import Image from 'next/image';
 import { useCart } from "@/hooks/useCart";
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-// import { isAdmin } from '@/lib/utils'; // isAdmin check will move to account page
 
 export default function Navbar() {
-  const { user, isAdmin } = useAuth();
+  const { user } = useAuth();
   const { cart } = useCart();
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
@@ -44,11 +43,6 @@ export default function Navbar() {
       <Link href="/shop" className="hover:text-gray-600 transition-colors focus:outline-none nav-link" aria-label="Shop">
         <Store className="h-6 w-6" />
       </Link>
-      {isAdmin && (
-        <Link href="/admin" className="hover:text-gray-600 transition-colors focus:outline-none nav-link" aria-label="Admin Dashboard">
-          <Shield className="h-6 w-6" />
-        </Link>
-      )}
       <Link href="/account" className="hover:text-gray-600 transition-colors focus:outline-none" aria-label={user ? 'Open account page' : 'Sign in'}>
         <User className="h-6 w-6" />
       </Link>
