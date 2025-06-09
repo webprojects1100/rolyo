@@ -135,9 +135,34 @@ export async function fetchArchivedProducts(): Promise<Product[]> {
   return productsWithSignedUrls;
 }
 
-type ProductImage = { image_url: string; position: number };
+// Define the detailed types for the new Product Variant structure
+export interface ProductVariant {
+  id: string;
+  size: string;
+  stock: number;
+}
 
-export async function fetchProductById(id: string) {
+export interface ProductColor {
+  id: string;
+  name: string;
+  hex: string;
+  // The showcase_image is now a direct URL, not just an ID
+  showcase_image_url: string;
+  variants: ProductVariant[];
+}
+
+export interface ProductDetails {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  // All images for the gallery, with public URLs
+  images: { id: string; url: string }[];
+  // All available colors with their variants
+  colors: ProductColor[];
+}
+
+export async function fetchProductById(id: string): Promise<ProductDetails | null> {
   const { data, error } = await supabase
     .from('products')
     .select(`
@@ -145,9 +170,14 @@ export async function fetchProductById(id: string) {
       name,
       description,
       price,
-      images (image_url, position),
-      sizes (size, stock),
-      colors (name, hex)
+      images (id, image_url, position),
+      product_colors (
+        id, 
+        name, 
+        hex, 
+        showcase_image:images(image_url),
+        product_variants (id, size, stock)
+      )
     `)
     .eq('id', id)
     .single();
@@ -157,66 +187,43 @@ export async function fetchProductById(id: string) {
     return null;
   }
 
-  // Return sorted image paths (root-level)
-  return {
+  // Helper to get public URL for an image path
+  const getPublicUrl = (path: string | null | undefined) => {
+    if (!path) return "";
+    return supabase.storage.from('product-images').getPublicUrl(path).data.publicUrl;
+  };
+
+  // Process the data into the final, clean structure
+  const productDetails: ProductDetails = {
     id: data.id,
     name: data.name,
     description: data.description,
     price: data.price,
-    images: data.images?.length > 0
-      ? (data.images as ProductImage[]).sort((a, b) => a.position - b.position).map((img) => {
-          const imagePath = img.image_url;
-          if (imagePath.startsWith("http") || imagePath.startsWith("/")) {
-            return imagePath;
-          } else {
-            const { data: publicUrlData } = supabase.storage
-              .from("product-images")
-              .getPublicUrl(imagePath);
-            return publicUrlData?.publicUrl || ""; // Or a placeholder if preferred
-          }
-        })
-      : [],
-    sizes: data.sizes?.map((s: { size: string; stock: number }) => ({
-      size: s.size,
-      stock: s.stock
-    })) || [],
-    colors: data.colors || [],
+    images: (data.images || [])
+      .sort((a, b) => a.position - b.position)
+      .map(img => ({ id: img.id, url: getPublicUrl(img.image_url) })),
+    colors: (data.product_colors || []).map(color => ({
+      id: color.id,
+      name: color.name,
+      hex: color.hex,
+      // The query fetches the nested image object, so we extract its URL
+      showcase_image_url: getPublicUrl(color.showcase_image?.image_url),
+      // Rename product_variants to variants for consistency
+      variants: color.product_variants.map(variant => ({
+        id: variant.id,
+        size: variant.size,
+        stock: variant.stock
+      })),
+    })),
   };
+
+  return productDetails;
 }
 
+// The fetchArchivedProductById function is now obsolete with the new status check,
+// but we will leave it for now to avoid breaking other parts of the app.
+// It should be updated or removed later.
 export async function fetchArchivedProductById(id: string) {
-  const { data, error } = await supabase
-    .from('products')
-    .select(`
-      id,
-      name,
-      description,
-      price,
-      images (image_url, position),
-      sizes (size),
-      colors (name, hex)
-    `)
-    .eq('id', id)
-    .eq('status', 'archive')
-    .single();
-
-  if (error || !data) {
-    console.error('Error fetching archived product by id:', error?.message);
-    return null;
-  }
-
-  // Return sorted image paths (root-level)
-  return {
-    id: data.id,
-    name: data.name,
-    description: data.description,
-    price: data.price,
-    images: data.images?.length > 0
-      ? (data.images as ProductImage[]).sort((a, b) => a.position - b.position).map((img) => img.image_url)
-      : [],
-    sizes: data.sizes?.map((s: { size: string }) => ({
-      size: s.size
-    })) || [],
-    colors: data.colors || [],
-  };
+  console.warn("fetchArchivedProductById is disabled.");
+  return null;
 }
