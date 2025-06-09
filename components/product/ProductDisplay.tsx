@@ -76,46 +76,50 @@ export default function ProductDisplay({ product }: ProductDisplayProps) {
         <p className="text-gray-700 mb-4 whitespace-pre-line">{product.description || "No description available."}</p>
         <p className="text-2xl font-semibold mb-6">₱{product.price.toFixed(2)}</p>
 
-        <div className="mb-6">
-          <h3 className="text-lg font-semibold mb-2">Color: <span className="font-normal">{selectedColor?.name || 'Select a color'}</span></h3>
-          <div className="flex gap-2">
-            {product.colors.map((color) => (
-              <button
-                key={color.id}
-                onClick={() => handleColorSelect(color.id)}
-                className={`w-8 h-8 rounded-full border-2 transition-all ${selectedColorId === color.id ? 'ring-2 ring-offset-2 ring-black' : 'border-gray-300'}`}
-                style={{ backgroundColor: color.hex }}
-                aria-label={`Select color ${color.name}`}
-              ></button>
-            ))}
-          </div>
-        </div>
-
-        <div className="mb-8">
-          <h3 className="text-lg font-semibold mb-2">Size: <span className="font-normal">{selectedSize || 'Select a size'}</span></h3>
-          <div className="flex gap-2 flex-wrap">
-            {availableSizes.map(({ size, stock }) => {
-              const isSelected = selectedSize === size;
-              const isOutOfStock = stock === 0;
-              return (
+        {product.colors.length > 0 && (
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold mb-2">Color: <span className="font-normal">{selectedColor?.name || 'Select a color'}</span></h3>
+            <div className="flex gap-2">
+              {product.colors.map((color) => (
                 <button
-                  key={size}
-                  onClick={() => handleSizeSelect(size)}
-                  disabled={isOutOfStock}
-                  className={`px-4 py-2 rounded-md border text-sm font-medium transition-colors
-                    ${isSelected ? 'bg-black text-white border-black' : 'bg-white text-black border-gray-300'}
-                    ${isOutOfStock ? 'opacity-50 cursor-not-allowed line-through' : 'hover:bg-gray-100'}
-                  `}
-                >
-                  {size}
-                </button>
-              );
-            })}
+                  key={color.id}
+                  onClick={() => handleColorSelect(color.id)}
+                  className={`w-8 h-8 rounded-full border-2 transition-all ${selectedColorId === color.id ? 'ring-2 ring-offset-2 ring-black' : 'border-gray-300'}`}
+                  style={{ backgroundColor: color.hex }}
+                  aria-label={`Select color ${color.name}`}
+                ></button>
+              ))}
+            </div>
           </div>
-          {selectedColor && availableSizes.length === 0 && (
-             <p className="text-sm text-gray-500 mt-2">This color is currently out of stock.</p>
-          )}
-        </div>
+        )}
+
+        {selectedColor && (
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold mb-2">Size: <span className="font-normal">{selectedSize || 'Select a size'}</span></h3>
+            <div className="flex gap-2 flex-wrap">
+              {availableSizes.map(({ size, stock }) => {
+                const isSelected = selectedSize === size;
+                const isOutOfStock = stock === 0;
+                return (
+                  <button
+                    key={size}
+                    onClick={() => !isOutOfStock && handleSizeSelect(size)}
+                    disabled={isOutOfStock}
+                    className={`px-4 py-2 rounded-md border text-sm font-medium transition-colors
+                      ${isSelected ? 'bg-black text-white border-black' : 'bg-white text-black border-gray-300'}
+                      ${isOutOfStock ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100'}
+                    `}
+                  >
+                    {isOutOfStock ? <s>{size}</s> : size}
+                  </button>
+                );
+              })}
+            </div>
+            {availableSizes.length > 0 && availableSizes.every(s => s.stock === 0) && (
+               <p className="text-sm text-red-500 mt-2">All sizes for this color are out of stock.</p>
+            )}
+          </div>
+        )}
         
         <ProductPurchaseBox
           product={product}
