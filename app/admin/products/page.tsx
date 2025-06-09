@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, ChangeEvent, useMemo } from "react";
+import { useEffect, useState, ChangeEvent } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { isAdmin } from "@/lib/utils";
@@ -418,99 +418,82 @@ export default function AdminProductsPage() {
         </div>
       ) : (
         /* Product List Display */
-        <div className="bg-white p-8 rounded-lg shadow-lg">
-            <h2 className="text-xl font-semibold mb-6">Existing Products</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {products.length > 0 ? products.map(p => (
-                    <ProductCard key={p.id} product={p} />
-                )) : (
-                    <p>No products found.</p>
-                )}
-            </div>
+        <div className="overflow-x-auto bg-white rounded-lg shadow">
+          <table className="min-w-full border-collapse">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="p-3 text-left text-sm font-semibold text-gray-600 border-b">Product</th>
+                <th className="p-3 text-left text-sm font-semibold text-gray-600 border-b">Variants & Stock</th>
+                <th className="p-3 text-left text-sm font-semibold text-gray-600 border-b">Price</th>
+                <th className="p-3 text-left text-sm font-semibold text-gray-600 border-b">Created</th>
+                <th className="p-3 text-left text-sm font-semibold text-gray-600 border-b">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {products.map((product) => (
+                <ProductRow key={product.id} product={product} />
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
   );
 }
 
-// --- Product Card Component for the list ---
-
-const ProductCard = ({ product }: { product: ProductWithDetails }) => {
-    
-    // Memoize the calculation of total stock to prevent re-renders
-    const totalStock = useMemo(() => {
-        return product.product_colors.reduce((acc, color) => {
-            return acc + color.variants.reduce((colorAcc, variant) => colorAcc + variant.stock, 0);
-        }, 0);
-    }, [product.product_colors]);
-
-    // Get signed URLs for showcase images
-    const [colorImageUrls, setColorImageUrls] = useState<Record<string, string>>({});
-    useEffect(() => {
-        const fetchImageUrls = async () => {
-            const urls: Record<string, string> = {};
-            for (const color of product.product_colors) {
-                const showcaseImage = product.images.find(img => img.id === color.showcase_image_id);
-                if (showcaseImage) {
-                    const url = getPublicImageUrl(showcaseImage.image_url);
-                    urls[color.id as string] = url;
-                }
-            }
-            setColorImageUrls(urls);
-        };
-        if (product.product_colors.length > 0) {
-            fetchImageUrls();
-        }
-    }, [product]);
-
-    const firstImageUrl = product.images.length > 0 ? getPublicImageUrl(product.images[0].image_url) : '/placeholder.png';
-
-    return (
-        <div className="border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-            <Image
-                src={firstImageUrl}
-                alt={product.name}
-                width={300}
-                height={300}
-                className="w-full h-48 object-cover"
-            />
-            <div className="p-4">
-                <h3 className="font-bold text-lg">{product.name}</h3>
-                <p className="text-gray-600 text-sm mb-2">{product.description.substring(0, 60)}...</p>
-                <p className="font-semibold mb-2">${product.price.toFixed(2)}</p>
-                
-                <div className="mb-3">
-                    <h4 className="font-semibold text-sm mb-2">Inventory</h4>
-                    {product.product_colors.length > 0 ? (
-                        <div className="space-y-2 text-xs">
-                            {product.product_colors.map(color => (
-                                <div key={color.id} className="flex items-center gap-2 p-1 rounded bg-gray-50">
-                                    {colorImageUrls[color.id as string] && (
-                                        <Image src={colorImageUrls[color.id as string]} alt={color.name} width={20} height={20} className="rounded-full" />
-                                    )}
-                                    <div style={{ backgroundColor: color.hex }} className="w-4 h-4 rounded-full border"></div>
-                                    <span className="flex-grow font-medium">{color.name}</span>
-                                    <span className="text-gray-700">
-                                        {color.variants.reduce((sum, v) => sum + v.stock, 0)} units
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                         <p className="text-xs text-gray-500">No variant inventory defined.</p>
-                    )}
-                </div>
-                <p className="text-sm font-bold">Total Stock: {totalStock}</p>
-                 <div className="mt-4 flex justify-end">
-                    {/* NOTE: Edit functionality will be restored later. */}
-                    <button className="text-sm text-gray-500 cursor-not-allowed" disabled>Edit</button>
-                </div>
-            </div>
-        </div>
-    );
-};
+// --- Product Row Component for the table ---
 
 function getPublicImageUrl(path: string): string {
-  const { data } = supabase.storage.from('product-images').getPublicUrl(path);
-  return data.publicUrl;
+    if (!path) return '/placeholder.png'; // Return a placeholder if path is null/empty
+    const { data } = supabase.storage.from('product-images').getPublicUrl(path);
+    return data.publicUrl;
 }
+
+const ProductRow = ({ product }: { product: ProductWithDetails }) => {
+    const firstImageUrl = product.images.length > 0 ? getPublicImageUrl(product.images[0].image_url) : '/placeholder.png';
+    
+    return (
+        <tr className="hover:bg-gray-50">
+            <td className="p-3 border-b border-gray-200">
+                <div className="flex items-center gap-4">
+                    <Image
+                        src={firstImageUrl}
+                        alt={product.name}
+                        width={64}
+                        height={64}
+                        className="rounded-md object-cover"
+                    />
+                    <div>
+                        <p className="font-bold">{product.name}</p>
+                        <p className="text-xs text-gray-500 max-w-xs truncate">{product.description}</p>
+                    </div>
+                </div>
+            </td>
+            <td className="p-3 border-b border-gray-200 align-top">
+                <div className="flex flex-col gap-2">
+                    {product.product_colors.length > 0 ? (
+                        product.product_colors.map(color => (
+                            <div key={color.id} className="flex items-center gap-2">
+                                <div className="w-5 h-5 rounded-full border" style={{ backgroundColor: color.hex }} title={color.name}></div>
+                                <span className="text-xs font-mono whitespace-nowrap">
+                                    {color.variants.map(v => `${v.size}:(${v.stock})`).join(' ')}
+                                </span>
+                            </div>
+                        ))
+                    ) : (
+                        <span className="text-xs text-gray-500">No variants defined</span>
+                    )}
+                </div>
+            </td>
+            <td className="p-3 border-b border-gray-200 align-top">
+                ${product.price.toFixed(2)}
+            </td>
+            <td className="p-3 border-b border-gray-200 align-top text-sm text-gray-600">
+                {new Date(product.created_at).toLocaleDateString()}
+            </td>
+            <td className="p-3 border-b border-gray-200 align-top">
+                <button className="text-sm text-gray-500 cursor-not-allowed" disabled>Edit</button>
+            </td>
+        </tr>
+    );
+};
