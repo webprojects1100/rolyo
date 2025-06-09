@@ -207,7 +207,7 @@ export async function fetchProductById(id: string): Promise<ProductDetails | nul
       name: color.name,
       hex: color.hex,
       // The query fetches the nested image object, so we extract its URL
-      showcase_image_url: getPublicUrl(color.showcase_image?.image_url),
+      showcase_image_url: getPublicUrl(color.showcase_image?.[0]?.image_url),
       // Rename product_variants to variants for consistency
       variants: color.product_variants.map(variant => ({
         id: variant.id,
