@@ -1,123 +1,97 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { useCart } from "@/hooks/useCart";
+import { ProductDetails, ProductVariant } from "@/lib/queries";
 
 interface ProductPurchaseBoxProps {
-  id: string;
-  name: string;
-  price: number;
-  imageUrl: string;
-  sizes: { size: string; stock: number }[];
-  selectedColor: { name: string; hex: string; id?: string } | null;
+  product: ProductDetails;
+  selectedVariant: ProductVariant | null;
 }
 
-const SIZE_LABELS: Record<string, string> = {
-  "XS": "EXTRA-SMALL",
-  "S": "SMALL",
-  "M": "MEDIUM",
-  "L": "LARGE",
-  "XL": "EXTRA - LARGE",
-  "XXL": "2X-LARGE",
-  "XXXL": "3X-LARGE",
-  "XXXXL": "4X-LARGE",
-};
-
-export default function ProductPurchaseBox({ id, name, price, imageUrl, sizes, selectedColor }: ProductPurchaseBoxProps) {
-  const [selectedSize, setSelectedSize] = useState<string>(sizes[0]?.size || "");
+export default function ProductPurchaseBox({ product, selectedVariant }: ProductPurchaseBoxProps) {
   const [quantity, setQuantity] = useState<number>(1);
   const { addToCart } = useCart();
   const [showToast, setShowToast] = useState(false);
 
-  // Find the stock for the selected size
-  const selectedStock = sizes.find(s => s.size === selectedSize)?.stock ?? 0;
+  // The available stock for the currently selected variant
+  const stock = selectedVariant?.stock ?? 0;
 
-  // Effect to reset quantity when selectedSize changes
+  // When the variant changes, reset the quantity to 1
   useEffect(() => {
-    const newSelectedSizeData = sizes.find(s => s.size === selectedSize);
-    const newSelectedStock = newSelectedSizeData?.stock ?? 0;
-    // Reset quantity to 1 if the new size has stock, or if the current quantity exceeds new stock
-    // Always ensure quantity is at least 1 if there is any stock for the selected size.
-    if (newSelectedStock > 0) {
-        setQuantity(prevQuantity => Math.min(Math.max(1, prevQuantity), newSelectedStock));
-        // If current quantity is higher than new stock, clamp it. Otherwise, keep it if it's valid, or set to 1.
-        // A simpler approach: always reset to 1 when size changes and stock > 0
-        // setQuantity(1);
-    } else {
-        // If new size is out of stock, quantity might still be 1 (and buttons will be disabled)
-        setQuantity(1); 
-    }
-  }, [selectedSize, sizes]);
+    setQuantity(1);
+  }, [selectedVariant]);
 
   const handleAddToCart = () => {
+    if (!selectedVariant || quantity === 0) return;
+
+    // Find the full color object to get its name and showcase image
+    const color = product.colors.find(c => c.variants.some(v => v.id === selectedVariant.id));
+
     addToCart({
-      id,
-      name,
-      price,
-      imageUrl,
-      size: selectedSize,
+      id: selectedVariant.id, // The variant's ID is the unique identifier in the cart
+      productId: product.id,
+      name: product.name,
+      price: product.price,
+      imageUrl: color?.showcase_image_url || product.images[0]?.url || '',
+      size: selectedVariant.size,
+      color: color?.name || "N/A",
       quantity,
-      stock: selectedStock,
-      color: selectedColor?.name || '',
+      stock: selectedVariant.stock,
     });
+
     setShowToast(true);
-    setTimeout(() => setShowToast(false), 2000);
+    setTimeout(() => setShowToast(false), 3000);
   };
+
+  // Determine if the "Add to Cart" button should be disabled
+  const canAddToCart = selectedVariant && stock > 0 && quantity > 0;
 
   return (
     <div className="w-full">
-      <div className="mb-2 text-sm font-medium">Color: {selectedColor?.name || 'Not selected'}</div>
-      <div className="mb-2 text-sm font-medium">Size: {SIZE_LABELS[selectedSize] || selectedSize}</div>
-      <div className="flex flex-wrap gap-2 mb-6">
-        {sizes.map(({ size, stock }) => (
-          <button
-            key={size + '-' + stock}
-            type="button"
-            className={`border rounded px-4 py-2 font-medium ${selectedSize === size ? "bg-black text-white" : "bg-white text-black"} ${stock === 0 ? "opacity-50 cursor-not-allowed" : ""}`}
-            onClick={() => stock > 0 && setSelectedSize(size)}
-            disabled={stock === 0}
-            aria-disabled={stock === 0}
-          >
-            {SIZE_LABELS[size] || size}
-            {stock === 0 && <span className="ml-2 text-xs text-red-500">(Out of stock)</span>}
-          </button>
-        ))}
-      </div>
-      {/* UX: If all sizes are out of stock, show a message and disable Add to Cart */}
-      {sizes.every(s => s.stock === 0) && (
-        <div className="mb-4 text-center text-red-600 font-semibold">All sizes are out of stock.</div>
-      )}
+      {/* --- This component no longer displays or selects color/size --- */}
+      {/* --- That is handled by the parent ProductDisplay component --- */}
+
+      {/* Quantity Selector */}
       <div className="mb-2 text-sm font-medium">Quantity</div>
       <div className="flex items-center mb-6">
         <button
-          type="button"
-          className="border rounded-l px-3 py-2 text-xl"
-          onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-          disabled={quantity <= 1 || selectedStock === 0}
-        >
-          –
-        </button>
-        <span className="border-t border-b px-4 py-2 text-lg">{quantity}</span>
+          onClick={() => setQuantity(q => Math.max(1, q - 1))}
+          disabled={quantity <= 1 || !selectedVariant}
+          className="border rounded-l px-3 py-2 text-xl disabled:opacity-50"
+        > – </button>
+        <span className="border-t border-b px-4 py-2 text-lg">{selectedVariant ? quantity : "-"}</span>
         <button
-          type="button"
-          className="border rounded-r px-3 py-2 text-xl"
-          onClick={() => setQuantity((q) => Math.min(selectedStock, q + 1))}
-          disabled={quantity >= selectedStock || selectedStock === 0}
-        >
-          +
-        </button>
+          onClick={() => setQuantity(q => Math.min(stock, q + 1))}
+          disabled={!selectedVariant || quantity >= stock}
+          className="border rounded-r px-3 py-2 text-xl disabled:opacity-50"
+        > + </button>
+        {selectedVariant && <span className="ml-4 text-sm text-gray-600">{stock} available</span>}
       </div>
+
+      {/* Add to Cart Button */}
       <button
-        className="bg-black text-white px-4 py-2 rounded-xl w-full"
         onClick={handleAddToCart}
-        disabled={selectedStock === 0 || sizes.every(s => s.stock === 0)}
+        disabled={!canAddToCart}
+        className="bg-black text-white px-4 py-2 rounded-xl w-full disabled:opacity-60"
       >
-        {selectedStock === 0 || sizes.every(s => s.stock === 0) ? 'Out of Stock' : 'Add to Cart'}
+        {!selectedVariant ? "Select a Size" : stock === 0 ? "Out of Stock" : "Add to Cart"}
       </button>
+
+      {/* "Added to Cart" Toast Notification */}
       {showToast && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
-          <div className="bg-green-600 text-white px-6 py-3 rounded shadow-lg flex items-center gap-4 pointer-events-auto">
-            Added to cart!
-            <a href="/cart" className="underline ml-2">View Cart</a>
+        <div className="fixed inset-0 flex items-end justify-center px-4 py-6 pointer-events-none sm:p-6 sm:items-start sm:justify-end z-50">
+          <div className="max-w-sm w-full bg-green-600 shadow-lg rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 overflow-hidden">
+            <div className="p-4">
+              <div className="flex items-start">
+                <div className="ml-3 w-0 flex-1 pt-0.5">
+                  <p className="text-sm font-medium text-white">Added to cart!</p>
+                  <div className="mt-2">
+                    <a href="/cart" className="text-sm font-medium text-white underline hover:text-green-100">View Cart</a>
+                    <button onClick={() => setShowToast(false)} className="ml-4 text-sm font-medium text-white underline hover:text-green-100">Dismiss</button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
