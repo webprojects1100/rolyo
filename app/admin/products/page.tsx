@@ -6,7 +6,15 @@ import { isAdmin } from "@/lib/utils";
 
 const SIZE_OPTIONS = ['S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
 
-// New data structures based on the variant system
+// --- NEW DATA STRUCTURES ---
+interface ImageRecord {
+  id: string;
+  product_color_id: string;
+  image_url: string;
+  position: number;
+  publicUrl?: string; // For displaying existing images
+}
+
 interface ProductVariant {
   id?: string;
   size: string;
@@ -17,7 +25,7 @@ interface ProductColor {
   id?: string;
   name: string;
   hex: string;
-  showcase_image_id?: string | null; // The ID of the image from the 'images' table
+  images: ImageRecord[]; // Each color has its own images
   variants: ProductVariant[];
 }
 
@@ -29,18 +37,15 @@ interface Product {
   created_at: string;
 }
 
-interface ImageRecord {
-  id: string;
-  image_url: string;
-  position: number;
-  signedUrl?: string;
-}
-
 interface ProductWithDetails extends Product {
-  images: ImageRecord[];
   product_colors: ProductColor[];
 }
 
+// --- NEW STATE INTERFACE FOR THE FORM ---
+interface FormProductColor extends Omit<ProductColor, 'images'> {
+  // Use File objects for new uploads
+  imageFiles: File[];
+}
 
 // --- Component ---
 export default function AdminProductsPage() {
@@ -49,19 +54,16 @@ export default function AdminProductsPage() {
   const [products, setProducts] = useState<ProductWithDetails[]>([]);
   const [showForm, setShowForm] = useState(false);
   
-  // States for the 'Add New Product' form
+  // --- FORM STATE ---
   const [form, setForm] = useState({ name: "", description: "", price: "" });
-  const [images, setImages] = useState<File[]>([]);
-  const [productColors, setProductColors] = useState<ProductColor[]>([]);
+  const [productColors, setProductColors] = useState<FormProductColor[]>([]);
   const [newColorName, setNewColorName] = useState('');
   const [newColorHex, setNewColorHex] = useState('#000000');
   
   const [formError, setFormError] = useState("");
   const [formLoading, setFormLoading] = useState(false);
-
-  // NOTE: Edit functionality will be re-implemented later.
-  // const [editProduct, setEditProduct] = useState<ProductWithDetails | null>(null);
-
+  
+  // --- Main Effect ---
   useEffect(() => {
     setLoading(true);
     const checkAdminAndFetch = async (user: import('@supabase/supabase-js').User | null) => {
@@ -96,15 +98,16 @@ export default function AdminProductsPage() {
     };
   }, []);
 
+  // --- DATA FETCHING ---
   async function fetchProducts() {
     try {
       const { data, error } = await supabase
         .from("products")
         .select(`
           id, name, description, price, created_at,
-          images (id, image_url, position),
           product_colors (
-            id, name, hex, showcase_image_id,
+            id, name, hex,
+            images (id, product_color_id, image_url, position),
             product_variants (id, size, stock)
           )
         `)
@@ -112,16 +115,14 @@ export default function AdminProductsPage() {
 
       if (error) throw error;
       
-      // Process the data to match the new 'ProductWithDetails' interface
-      // This is now more robust to handle products that might not have colors/variants yet.
-      const processedData = data.map(p => {
-        const product_colors = (p.product_colors || []).map(c => ({
-            ...c,
-            // The DB returns 'product_variants', but our interface needs 'variants'
-            variants: c.product_variants || [] 
-        }));
-        return { ...p, product_colors };
-      });
+      const processedData = data.map(p => ({
+        ...p,
+        product_colors: (p.product_colors || []).map(c => ({
+          ...c,
+          variants: c.product_variants || [],
+          images: c.images || []
+        })),
+      }));
       
       setProducts(processedData as ProductWithDetails[]);
 
@@ -131,22 +132,7 @@ export default function AdminProductsPage() {
     }
   }
   
-  // --- Form Input Handlers ---
-
-  function handleImageChange(e: ChangeEvent<HTMLInputElement>) {
-    if (!e.target.files) return;
-    const files = Array.from(e.target.files);
-    if (files.length + images.length > 3) {
-      setFormError('You can upload up to 3 images.');
-      return;
-    }
-    setImages(prev => [...prev, ...files].slice(0, 3));
-  }
-
-  function handleRemoveImage(idx: number) {
-    setImages(prev => prev.filter((_, i: number) => i !== idx));
-  }
-
+  // --- FORM HANDLERS ---
   function handleAddColor() {
     if (newColorName.trim() && newColorHex.trim()) {
       if (productColors.some(c => c.name.toLowerCase() === newColorName.trim().toLowerCase())) {
@@ -158,6 +144,7 @@ export default function AdminProductsPage() {
         { 
           name: newColorName.trim(), 
           hex: newColorHex.trim(),
+          imageFiles: [], // Start with an empty image array for the new color
           variants: SIZE_OPTIONS.map(size => ({ size, stock: 0 }))
         }
       ]);
@@ -169,6 +156,28 @@ export default function AdminProductsPage() {
 
   function handleRemoveColor(idx: number) {
     setProductColors(prev => prev.filter((_, i) => i !== idx));
+  }
+
+  function handleColorImageChange(colorIndex: number, e: ChangeEvent<HTMLInputElement>) {
+    if (!e.target.files) return;
+    const files = Array.from(e.target.files);
+    
+    setProductColors(prev => prev.map((color, cIdx) => {
+        if (cIdx === colorIndex) {
+            // Simple approach: append new files. Capping can be added later if needed.
+            return { ...color, imageFiles: [...color.imageFiles, ...files] };
+        }
+        return color;
+    }));
+  }
+
+  function handleRemoveColorImage(colorIndex: number, imageIndex: number) {
+    setProductColors(prev => prev.map((color, cIdx) => {
+        if (cIdx === colorIndex) {
+            return { ...color, imageFiles: color.imageFiles.filter((_, i) => i !== imageIndex) };
+        }
+        return color;
+    }));
   }
 
   function handleVariantStockChange(colorIndex: number, variantIndex: number, stock: string) {
@@ -185,104 +194,89 @@ export default function AdminProductsPage() {
       return color;
     }));
   }
-  
-  function handleShowcaseImageChange(colorIndex: number, imageIndex: string) {
-    // Here, we temporarily store the *index* of the image file.
-    // We will convert this to a real image ID after the images are uploaded.
-    setProductColors(prev => prev.map((color, cIdx) => 
-      cIdx === colorIndex ? { ...color, showcase_image_id: imageIndex } : color
-    ));
-  }
 
-  // --- Product Creation Logic ---
-  
+  // --- REWRITTEN PRODUCT CREATION LOGIC ---
   async function handleCreateProduct(e: React.FormEvent) {
     e.preventDefault();
     setFormError("");
 
     if (!form.name.trim() || !form.price.trim()) { setFormError('Name and price are required.'); return; }
-    if (images.length === 0) { setFormError('At least one image is required.'); return; }
     if (productColors.length === 0) { setFormError('At least one color must be added.'); return; }
-    if (productColors.some(c => c.showcase_image_id === undefined || c.showcase_image_id === null)) {
-        setFormError("Each color must have a showcase image assigned.");
+    if (productColors.some(c => c.imageFiles.length === 0)) {
+        setFormError("Each color must have at least one image.");
         return;
     }
 
     setFormLoading(true);
+    let createdProductId: string | null = null;
 
     try {
-        // 1. Create Product
-        const { data: productData, error: productError } = await supabase.from('products').insert({
-            name: form.name.trim(),
-            description: form.description.trim(),
-            price: parseFloat(form.price),
+      // 1. Create Product
+      const { data: productData, error: productError } = await supabase.from('products').insert({
+          name: form.name.trim(),
+          description: form.description.trim(),
+          price: parseFloat(form.price),
+      }).select().single();
+      if (productError) throw productError;
+      createdProductId = productData.id;
+
+      // 2. Loop through each color, create it, upload its images, and create variants
+      for (const color of productColors) {
+        // Create the ProductColor entry
+        const { data: colorData, error: colorError } = await supabase.from('product_colors').insert({
+          product_id: createdProductId,
+          name: color.name,
+          hex: color.hex,
         }).select().single();
-        if (productError) throw productError;
+        if (colorError) throw colorError;
 
-        // 2. Upload and Insert Images, getting back the DB records with IDs
-        const uploadedImageRecords: ImageRecord[] = [];
-        for (let i = 0; i < images.length; i++) {
-            const file = images[i];
-            const filePath = `products/${productData.id}/${Date.now()}-${file.name}`;
-            const { error: uploadError } = await supabase.storage.from('product-images').upload(filePath, file);
-            if (uploadError) throw new Error(`Image upload failed: ${uploadError.message}`);
-            
-            const { data: dbImage, error: dbError } = await supabase.from('images').insert({
-                product_id: productData.id, image_url: filePath, position: i + 1,
-            }).select().single();
-            if (dbError) throw dbError;
-            uploadedImageRecords.push(dbImage as ImageRecord);
+        // Upload images for this specific color
+        for (let i = 0; i < color.imageFiles.length; i++) {
+          const file = color.imageFiles[i];
+          const filePath = `products/${createdProductId}/${colorData.id}/${Date.now()}-${file.name}`;
+          
+          const { error: uploadError } = await supabase.storage.from('product-images').upload(filePath, file);
+          if (uploadError) throw new Error(`Image upload failed for ${color.name}: ${uploadError.message}`);
+          
+          // Create the image record in the database
+          const { error: dbError } = await supabase.from('images').insert({
+              product_color_id: colorData.id,
+              image_url: filePath,
+              position: i + 1, // Position is based on upload order
+          });
+          if (dbError) throw dbError;
         }
 
-        // 3. Insert Colors and their Variants
-        for (const color of productColors) {
-            // Find the database ID of the showcase image using the temporary index
-            const showcaseImageIndex = parseInt(color.showcase_image_id || '-1', 10);
-            const showcaseImageDbId = uploadedImageRecords[showcaseImageIndex]?.id;
-
-            if (!showcaseImageDbId) {
-                throw new Error(`Could not find uploaded image for color ${color.name}.`);
-            }
-
-            const { data: colorData, error: colorError } = await supabase.from('product_colors').insert({
-                product_id: productData.id,
-                name: color.name,
-                hex: color.hex,
-                showcase_image_id: showcaseImageDbId
-            }).select().single();
-            if (colorError) throw colorError;
-
-            // 4. Insert Variants for each Color
-            const variantsToInsert = color.variants
-                .filter(v => v.stock > 0) // Only insert variants that have stock
-                .map(v => ({
-                    product_color_id: colorData.id,
-                    size: v.size,
-                    stock: v.stock,
-                }));
-            
-            if (variantsToInsert.length > 0) {
-                const { error: variantError } = await supabase.from('product_variants').insert(variantsToInsert);
-                if (variantError) throw variantError;
-            }
+        // Insert Variants for this color
+        const variantsToInsert = color.variants
+            .filter(v => v.stock > 0)
+            .map(v => ({
+                product_color_id: colorData.id,
+                size: v.size,
+                stock: v.stock,
+            }));
+        
+        if (variantsToInsert.length > 0) {
+            const { error: variantError } = await supabase.from('product_variants').insert(variantsToInsert);
+            if (variantError) throw variantError;
         }
+      }
 
-        // 5. Reset Form and Refetch Products
-        resetForm();
-        await fetchProducts();
+      // 3. Success: Reset Form and Refetch Products
+      resetForm();
+      await fetchProducts();
 
     } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
-        setFormError(`Failed to create product: ${errorMessage}`);
-        // TODO: Add cleanup logic here if product creation fails midway, e.g., delete uploaded images or the product entry.
+      const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+      setFormError(`Failed to create product: ${errorMessage}`);
+      // NOTE: A robust solution would also clean up any partially created data (the product, colors, or images) on failure.
     } finally {
-        setFormLoading(false);
+      setFormLoading(false);
     }
   }
 
   function resetForm() {
     setForm({ name: "", description: "", price: "" });
-    setImages([]);
     setProductColors([]);
     setNewColorName('');
     setNewColorHex('#000000');
@@ -292,7 +286,6 @@ export default function AdminProductsPage() {
   }
   
   // --- Render Logic ---
-
   if (loading) return <div className="flex justify-center items-center h-screen"><p>Loading...</p></div>;
   if (!admin) return <div className="flex justify-center items-center h-screen"><p>You are not authorized to view this page.</p></div>;
 
@@ -305,7 +298,7 @@ export default function AdminProductsPage() {
 
       {showForm ? (
         <div className="bg-white p-8 rounded-lg shadow-lg mb-8 max-w-4xl mx-auto">
-          <h2 className="text-xl font-semibold mb-6">Add New Product</h2>
+          <h2 className="text-xl font-semibold mb-6">Create New Product</h2>
           <form onSubmit={handleCreateProduct}>
             
             {/* Section 1: Product Details */}
@@ -317,98 +310,84 @@ export default function AdminProductsPage() {
                     <input type="number" value={form.price} onChange={e => setForm({...form, price: e.target.value})} placeholder="Price" className="p-2 border rounded" required />
                 </div>
             </div>
-
-            {/* Section 2: Upload Images */}
-            <div className="mb-8 border-b pb-8">
-                <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">2. Upload Images (up to 3)</h3>
-                <input type="file" multiple onChange={handleImageChange} accept="image/*" className="mb-4" />
-                <div className="flex gap-4">
-                    {images.map((file, idx) => (
-                        <div key={idx} className="relative">
-                            <Image src={URL.createObjectURL(file)} alt="Preview" width={100} height={100} className="rounded" />
-                            <button type="button" onClick={() => handleRemoveImage(idx)} className="absolute top-0 right-0 bg-red-500 text-white rounded-full text-xs w-5 h-5 flex items-center justify-center">&times;</button>
-                        </div>
-                    ))}
-                </div>
-            </div>
             
-            {/* Section 3: Define Colors and Stock */}
+            {/* Section 2: Define Colors, Images, and Stock */}
             <div className="mb-8">
-                <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">3. Define Colors and Stock</h3>
+                <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">2. Define Colors, Images, and Stock</h3>
                 
                 {/* Add New Color Form */}
-                <div className="flex items-center gap-4 p-4 border rounded-md bg-gray-50 mb-6">
+                <div className="flex items-end gap-4 p-4 border rounded-md bg-gray-50 mb-6">
                     <div className="flex-grow">
-                        <label className="block text-sm font-medium text-gray-700">Color Name</label>
+                        <label className="block text-sm font-medium text-gray-700">New Color Name</label>
                         <input type="text" value={newColorName} onChange={e => setNewColorName(e.target.value)} placeholder="e.g., Midnight Blue" className="p-2 border rounded w-full mt-1" />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Hex</label>
                         <input type="color" value={newColorHex} onChange={e => setNewColorHex(e.target.value)} className="p-1 h-10 w-14 block bg-white border border-gray-300 rounded-md cursor-pointer" />
                     </div>
-                    <button type="button" onClick={handleAddColor} className="self-end bg-gray-200 text-gray-800 px-4 py-2 rounded hover:bg-gray-300">Add Color</button>
+                    <button type="button" onClick={handleAddColor} className="bg-gray-200 text-gray-800 px-4 py-2 rounded hover:bg-gray-300 h-10">Add Color</button>
                 </div>
 
                 {/* List of Added Colors */}
                 <div className="space-y-6">
-                    {productColors.map((color, colorIdx) => (
-                        <div key={colorIdx} className="p-4 border rounded-lg shadow-sm bg-white">
-                            <div className="flex justify-between items-start">
-                                <div className="flex items-center gap-3">
-                                    <div style={{ backgroundColor: color.hex }} className="w-8 h-8 rounded-full border"></div>
-                                    <h4 className="font-semibold text-lg">{color.name}</h4>
-                                </div>
-                                <button type="button" onClick={() => handleRemoveColor(colorIdx)} className="text-red-500 hover:text-red-700">&times; Remove</button>
-                            </div>
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-                                {/* Showcase Image Selection */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Showcase Image</label>
-                                    <select
-                                        value={color.showcase_image_id || ''}
-                                        onChange={(e) => handleShowcaseImageChange(colorIdx, e.target.value)}
-                                        className="p-2 border rounded w-full"
-                                        disabled={images.length === 0}
-                                    >
-                                        <option value="" disabled>Select an image</option>
-                                        {images.map((_, imgIdx) => (
-                                            <option key={imgIdx} value={imgIdx}>
-                                                Image {imgIdx + 1}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    {images.length === 0 && <p className="text-xs text-gray-500 mt-1">Upload images first to assign one.</p>}
-                                </div>
-
-                                {/* Stock per Size Inputs */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Stock per Size</label>
-                                    <div className="space-y-2">
-                                        {color.variants.map((variant, variantIdx) => (
-                                            <div key={variantIdx} className="flex items-center gap-4">
-                                                <span className="font-medium w-12">{variant.size}</span>
-                                                <input
-                                                    type="number"
-                                                    value={variant.stock}
-                                                    onChange={(e) => handleVariantStockChange(colorIdx, variantIdx, e.target.value)}
-                                                    placeholder="0"
-                                                    className="p-2 border rounded w-full"
-                                                    min="0"
-                                                />
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
+                  {productColors.map((color, colorIdx) => (
+                    <div key={colorIdx} className="p-4 border rounded-lg shadow-sm bg-white">
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="flex items-center gap-3">
+                            <div style={{ backgroundColor: color.hex }} className="w-8 h-8 rounded-full border"></div>
+                            <h4 className="font-semibold text-lg">{color.name}</h4>
                         </div>
-                    ))}
+                        <button type="button" onClick={() => handleRemoveColor(colorIdx)} className="text-red-500 hover:text-red-700 font-semibold">&times; Remove Color</button>
+                      </div>
+                      
+                      {/* Per-Color Image Uploader */}
+                      <div className="mb-4 p-4 border-2 border-dashed rounded-lg">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Upload Images for {color.name}</label>
+                        <input 
+                          type="file" 
+                          multiple 
+                          onChange={(e) => handleColorImageChange(colorIdx, e)} 
+                          accept="image/*" 
+                          className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                        />
+                        <div className="flex gap-4 mt-4 flex-wrap">
+                          {color.imageFiles.map((file, imgIdx) => (
+                              <div key={imgIdx} className="relative">
+                                  <Image src={URL.createObjectURL(file)} alt="Preview" width={100} height={100} className="rounded object-cover" />
+                                  <button type="button" onClick={() => handleRemoveColorImage(colorIdx, imgIdx)} className="absolute top-0 right-0 bg-red-500 text-white rounded-full text-xs w-5 h-5 flex items-center justify-center -mt-1 -mr-1">&times;</button>
+                              </div>
+                          ))}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2">The first image will be the primary showcase image.</p>
+                      </div>
+
+                      {/* Stock per Size Inputs */}
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Stock per Size</label>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+                            {color.variants.map((variant, variantIdx) => (
+                                <div key={variantIdx}>
+                                    <label className="block text-xs font-bold text-center mb-1">{variant.size}</label>
+                                    <input
+                                        type="number"
+                                        value={variant.stock}
+                                        onChange={(e) => handleVariantStockChange(colorIdx, variantIdx, e.target.value)}
+                                        placeholder="0"
+                                        className="p-2 border rounded w-full text-center"
+                                        min="0"
+                                    />
+                                </div>
+                            ))}
+                          </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
             </div>
 
             {formError && <p className="text-red-500 text-sm mb-4">{formError}</p>}
 
-            <div className="flex justify-end gap-4">
+            <div className="flex justify-end gap-4 mt-8">
                 <button type="button" onClick={() => setShowForm(false)} className="bg-gray-300 text-gray-800 px-6 py-2 rounded hover:bg-gray-400">Cancel</button>
                 <button type="submit" className="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 disabled:bg-gray-400" disabled={formLoading}>
                     {formLoading ? 'Saving...' : 'Save Product'}
@@ -441,16 +420,19 @@ export default function AdminProductsPage() {
   );
 }
 
-// --- Product Row Component for the table ---
+// --- UPDATED PRODUCT ROW COMPONENT ---
 
 function getPublicImageUrl(path: string): string {
-    if (!path) return '/placeholder.png'; // Return a placeholder if path is null/empty
+    if (!path) return '/placeholder.png';
     const { data } = supabase.storage.from('product-images').getPublicUrl(path);
     return data.publicUrl;
 }
 
 const ProductRow = ({ product }: { product: ProductWithDetails }) => {
-    const firstImageUrl = product.images.length > 0 ? getPublicImageUrl(product.images[0].image_url) : '/placeholder.png';
+    // Find the very first image of the first color to show in the table.
+    const firstColor = product.product_colors?.[0];
+    const showcaseImage = firstColor?.images?.find(img => img.position === 1);
+    const firstImageUrl = showcaseImage ? getPublicImageUrl(showcaseImage.image_url) : '/placeholder.png';
     
     return (
         <tr className="hover:bg-gray-50">
