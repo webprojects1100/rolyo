@@ -113,11 +113,12 @@ export default function AdminProductsPage() {
       if (error) throw error;
       
       // Process the data to match the new 'ProductWithDetails' interface
+      // This is now more robust to handle products that might not have colors/variants yet.
       const processedData = data.map(p => {
-        const product_colors = p.product_colors.map(c => ({
+        const product_colors = (p.product_colors || []).map(c => ({
             ...c,
             // The DB returns 'product_variants', but our interface needs 'variants'
-            variants: c.product_variants 
+            variants: c.product_variants || [] 
         }));
         return { ...p, product_colors };
       });
@@ -440,14 +441,18 @@ export default function AdminProductsPage() {
                 </td>
                 <td className="p-3 border-b align-top">
                   <div className="flex flex-col gap-2">
-                    {product.product_colors.map(color => (
-                      <div key={color.id} className="flex items-center gap-2">
-                        <div className="w-5 h-5 rounded-full border" style={{ backgroundColor: color.hex }} title={color.name}></div>
-                        <span className="text-xs font-mono">
-                          {color.variants.map(v => `${v.size}:(${v.stock})`).join(' ')}
-                        </span>
-                      </div>
-                    ))}
+                    {product.product_colors && product.product_colors.length > 0 ? (
+                      product.product_colors.map(color => (
+                        <div key={color.id} className="flex items-center gap-2">
+                          <div className="w-5 h-5 rounded-full border" style={{ backgroundColor: color.hex }} title={color.name}></div>
+                          <span className="text-xs font-mono">
+                            {color.variants.map(v => `${v.size}:(${v.stock})`).join(' ')}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <span className="text-xs text-gray-500">No variants defined</span>
+                    )}
                   </div>
                 </td>
                 <td className="p-3 border-b">₱{product.price}</td>
