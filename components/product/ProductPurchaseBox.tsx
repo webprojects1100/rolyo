@@ -26,13 +26,16 @@ export default function ProductPurchaseBox({ product, selectedVariant }: Product
 
     // Find the full color object to get its name and showcase image
     const color = product.colors.find(c => c.variants.some(v => v.id === selectedVariant.id));
+    
+    // Find the showcase image for the selected color (position 1, or the first image as a fallback)
+    const showcaseImage = color?.images?.find(img => img.position === 1) || color?.images?.[0];
 
     addToCart({
       id: selectedVariant.id, // The variant's ID is the unique identifier in the cart
       productId: product.id,
       name: product.name,
       price: product.price,
-      imageUrl: color?.showcase_image_url || product.images[0]?.url || '',
+      imageUrl: showcaseImage?.url || '/placeholder.png', // Use the showcase image URL
       size: selectedVariant.size,
       color: color?.name || "N/A",
       quantity,
