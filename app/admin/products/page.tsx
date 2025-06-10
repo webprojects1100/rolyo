@@ -43,8 +43,9 @@ interface ProductWithDetails extends Product {
 
 // --- NEW STATE INTERFACE FOR THE FORM ---
 interface FormProductColor extends Omit<ProductColor, 'images'> {
-  // Use File objects for new uploads
-  imageFiles: File[];
+  id?: string; // Keep the ID for existing colors
+  existingImages: ImageRecord[]; // Images already in the DB
+  newImageFiles: File[]; // New images to be uploaded
 }
 
 // --- Component ---
@@ -62,6 +63,9 @@ export default function AdminProductsPage() {
   
   const [formError, setFormError] = useState("");
   const [formLoading, setFormLoading] = useState(false);
+  
+  // --- NEW STATE for editing ---
+  const [editingProduct, setEditingProduct] = useState<ProductWithDetails | null>(null);
   
   // --- Main Effect ---
   useEffect(() => {
@@ -131,7 +135,7 @@ export default function AdminProductsPage() {
       setProducts([]);
     }
   }
-  
+
   // --- FORM HANDLERS ---
   function handleAddColor() {
     if (newColorName.trim() && newColorHex.trim()) {
@@ -144,7 +148,8 @@ export default function AdminProductsPage() {
         { 
           name: newColorName.trim(), 
           hex: newColorHex.trim(),
-          imageFiles: [], // Start with an empty image array for the new color
+          existingImages: [],
+          newImageFiles: [],
           variants: SIZE_OPTIONS.map(size => ({ size, stock: 0 }))
         }
       ]);
@@ -165,7 +170,7 @@ export default function AdminProductsPage() {
     setProductColors(prev => prev.map((color, cIdx) => {
         if (cIdx === colorIndex) {
             // Simple approach: append new files. Capping can be added later if needed.
-            return { ...color, imageFiles: [...color.imageFiles, ...files] };
+            return { ...color, newImageFiles: [...color.newImageFiles, ...files] };
         }
         return color;
     }));
@@ -174,7 +179,7 @@ export default function AdminProductsPage() {
   function handleRemoveColorImage(colorIndex: number, imageIndex: number) {
     setProductColors(prev => prev.map((color, cIdx) => {
         if (cIdx === colorIndex) {
-            return { ...color, imageFiles: color.imageFiles.filter((_, i) => i !== imageIndex) };
+            return { ...color, newImageFiles: color.newImageFiles.filter((_, i) => i !== imageIndex) };
         }
         return color;
     }));
@@ -202,9 +207,9 @@ export default function AdminProductsPage() {
 
     if (!form.name.trim() || !form.price.trim()) { setFormError('Name and price are required.'); return; }
     if (productColors.length === 0) { setFormError('At least one color must be added.'); return; }
-    if (productColors.some(c => c.imageFiles.length === 0)) {
+    if (productColors.some(c => c.newImageFiles.length === 0)) {
         setFormError("Each color must have at least one image.");
-        return;
+      return;
     }
 
     setFormLoading(true);
@@ -213,8 +218,8 @@ export default function AdminProductsPage() {
     try {
       // 1. Create Product
       const { data: productData, error: productError } = await supabase.from('products').insert({
-          name: form.name.trim(),
-          description: form.description.trim(),
+        name: form.name.trim(),
+        description: form.description.trim(),
           price: parseFloat(form.price),
       }).select().single();
       if (productError) throw productError;
@@ -231,8 +236,8 @@ export default function AdminProductsPage() {
         if (colorError) throw colorError;
 
         // Upload images for this specific color
-        for (let i = 0; i < color.imageFiles.length; i++) {
-          const file = color.imageFiles[i];
+        for (let i = 0; i < color.newImageFiles.length; i++) {
+          const file = color.newImageFiles[i];
           const filePath = `products/${createdProductId}/${colorData.id}/${Date.now()}-${file.name}`;
           
           const { error: uploadError } = await supabase.storage.from('product-images').upload(filePath, file);
@@ -275,6 +280,109 @@ export default function AdminProductsPage() {
     }
   }
 
+  // --- EDIT & DELETE HANDLERS ---
+  function handleEditClick(product: ProductWithDetails) {
+    setEditingProduct(product);
+    setForm({
+      name: product.name,
+      description: product.description || "",
+      price: String(product.price),
+    });
+    
+    // Convert the loaded product data into the format the form expects
+    setProductColors(product.product_colors.map(c => ({
+      id: c.id,
+      name: c.name,
+      hex: c.hex,
+      // Separate existing images from new file uploads
+      existingImages: c.images || [],
+      newImageFiles: [],
+      variants: c.variants.map(v => ({...v})) // Ensure a deep copy
+    })));
+
+    setShowForm(true);
+  }
+
+  async function handleUpdateProduct(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingProduct) return;
+
+    setFormError("");
+    setFormLoading(true);
+
+    try {
+        // ... (Comprehensive update logic will go here)
+        // This is a placeholder for the complex update logic.
+        // For now, we will just log the intention.
+        console.log("Preparing to update product:", editingProduct.id);
+        console.log("New data:", { form, productColors });
+        
+        // In a real implementation, we would:
+        // 1. Update product table
+        // 2. Diff product_colors to find new, updated, and deleted colors
+        // 3. For each color, diff images to find new and deleted images
+        // 4. Upload/delete images from storage
+        // 5. Insert/update/delete records from `product_colors` and `images` tables
+        // 6. Upsert variants for each color
+        
+        // For this step, we'll just show a success and reset.
+        alert("Product update logic is being implemented. Check console for data.");
+
+        await fetchProducts(); // Refetch to ensure data is fresh
+        resetForm(); // Resets form and `editingProduct` state
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+        setFormError(`Failed to update product: ${errorMessage}`);
+    } finally {
+        setFormLoading(false);
+    }
+  }
+
+  // --- NEW DELETE LOGIC ---
+  async function handleDeleteProduct(product: ProductWithDetails) {
+    if (!window.confirm(`Are you sure you want to delete "${product.name}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      // 1. Delete all images from Supabase Storage first.
+      // This requires listing all files in all of the product's color folders.
+      for (const color of product.product_colors) {
+        const folderPath = `products/${product.id}/${color.id}`;
+        const { data: files, error: listError } = await supabase.storage.from('product-images').list(folderPath);
+
+        if (listError) {
+          console.error(`Could not list files for deletion for color ${color.name}:`, listError);
+          // Continue to attempt deletion of DB record anyway
+        }
+
+        if (files && files.length > 0) {
+          const filePaths = files.map(file => `${folderPath}/${file.name}`);
+          const { error: removeError } = await supabase.storage.from('product-images').remove(filePaths);
+          if (removeError) {
+            // Log the error but don't block the product deletion
+            console.error(`Failed to delete some images from storage for color ${color.name}:`, removeError);
+          }
+        }
+      }
+
+      // 2. Delete the product from the database.
+      // Thanks to CASCADE settings, this will also delete all related product_colors, images, and product_variants.
+      const { error: deleteError } = await supabase.from('products').delete().eq('id', product.id);
+      if (deleteError) throw deleteError;
+
+      // 3. Update the UI state to reflect the deletion.
+      setProducts(prev => prev.filter(p => p.id !== product.id));
+
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+      alert(`Failed to delete product: ${errorMessage}`);
+    }
+    setFormError("");
+    setFormLoading(false);
+    setEditingProduct(null); // Also reset the editing state
+  }
+
   function resetForm() {
     setForm({ name: "", description: "", price: "" });
     setProductColors([]);
@@ -298,8 +406,8 @@ export default function AdminProductsPage() {
 
       {showForm ? (
         <div className="bg-white p-8 rounded-lg shadow-lg mb-8 max-w-4xl mx-auto">
-          <h2 className="text-xl font-semibold mb-6">Create New Product</h2>
-          <form onSubmit={handleCreateProduct}>
+          <h2 className="text-xl font-semibold mb-6">{editingProduct ? "Edit Product" : "Create New Product"}</h2>
+          <form onSubmit={editingProduct ? handleUpdateProduct : handleCreateProduct}>
             
             {/* Section 1: Product Details */}
             <div className="mb-8 border-b pb-8">
@@ -308,7 +416,7 @@ export default function AdminProductsPage() {
                     <input type="text" value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="Product Name" className="p-2 border rounded" required />
                     <textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})} placeholder="Description" className="p-2 border rounded" rows={4}></textarea>
                     <input type="number" value={form.price} onChange={e => setForm({...form, price: e.target.value})} placeholder="Price" className="p-2 border rounded" required />
-                </div>
+          </div>
             </div>
             
             {/* Section 2: Define Colors, Images, and Stock */}
@@ -320,11 +428,11 @@ export default function AdminProductsPage() {
                     <div className="flex-grow">
                         <label className="block text-sm font-medium text-gray-700">New Color Name</label>
                         <input type="text" value={newColorName} onChange={e => setNewColorName(e.target.value)} placeholder="e.g., Midnight Blue" className="p-2 border rounded w-full mt-1" />
-                    </div>
+                  </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Hex</label>
                         <input type="color" value={newColorHex} onChange={e => setNewColorHex(e.target.value)} className="p-1 h-10 w-14 block bg-white border border-gray-300 rounded-md cursor-pointer" />
-                    </div>
+            </div>
                     <button type="button" onClick={handleAddColor} className="bg-gray-200 text-gray-800 px-4 py-2 rounded hover:bg-gray-300 h-10">Add Color</button>
                 </div>
 
@@ -336,14 +444,14 @@ export default function AdminProductsPage() {
                         <div className="flex items-center gap-3">
                             <div style={{ backgroundColor: color.hex }} className="w-8 h-8 rounded-full border"></div>
                             <h4 className="font-semibold text-lg">{color.name}</h4>
-                        </div>
+            </div>
                         <button type="button" onClick={() => handleRemoveColor(colorIdx)} className="text-red-500 hover:text-red-700 font-semibold">&times; Remove Color</button>
                       </div>
                       
                       {/* Per-Color Image Uploader */}
                       <div className="mb-4 p-4 border-2 border-dashed rounded-lg">
                         <label className="block text-sm font-medium text-gray-700 mb-2">Upload Images for {color.name}</label>
-                        <input 
+              <input
                           type="file" 
                           multiple 
                           onChange={(e) => handleColorImageChange(colorIdx, e)} 
@@ -351,15 +459,15 @@ export default function AdminProductsPage() {
                           className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                         />
                         <div className="flex gap-4 mt-4 flex-wrap">
-                          {color.imageFiles.map((file, imgIdx) => (
+                          {color.newImageFiles.map((file, imgIdx) => (
                               <div key={imgIdx} className="relative">
                                   <Image src={URL.createObjectURL(file)} alt="Preview" width={100} height={100} className="rounded object-cover" />
                                   <button type="button" onClick={() => handleRemoveColorImage(colorIdx, imgIdx)} className="absolute top-0 right-0 bg-red-500 text-white rounded-full text-xs w-5 h-5 flex items-center justify-center -mt-1 -mr-1">&times;</button>
-                              </div>
+                      </div>
                           ))}
                         </div>
                         <p className="text-xs text-gray-500 mt-2">The first image will be the primary showcase image.</p>
-                      </div>
+              </div>
 
                       {/* Stock per Size Inputs */}
                       <div>
@@ -368,18 +476,18 @@ export default function AdminProductsPage() {
                             {color.variants.map((variant, variantIdx) => (
                                 <div key={variantIdx}>
                                     <label className="block text-xs font-bold text-center mb-1">{variant.size}</label>
-                                    <input
-                                        type="number"
+                    <input
+                      type="number"
                                         value={variant.stock}
                                         onChange={(e) => handleVariantStockChange(colorIdx, variantIdx, e.target.value)}
                                         placeholder="0"
                                         className="p-2 border rounded w-full text-center"
-                                        min="0"
-                                    />
-                                </div>
-                            ))}
-                          </div>
-                      </div>
+                      min="0"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
                     </div>
                   ))}
                 </div>
@@ -391,7 +499,7 @@ export default function AdminProductsPage() {
                 <button type="button" onClick={() => setShowForm(false)} className="bg-gray-300 text-gray-800 px-6 py-2 rounded hover:bg-gray-400">Cancel</button>
                 <button type="submit" className="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 disabled:bg-gray-400" disabled={formLoading}>
                     {formLoading ? 'Saving...' : 'Save Product'}
-                </button>
+              </button>
             </div>
           </form>
         </div>
@@ -410,7 +518,12 @@ export default function AdminProductsPage() {
             </thead>
             <tbody>
               {products.map((product) => (
-                <ProductRow key={product.id} product={product} />
+                <ProductRow 
+                  key={product.id} 
+                  product={product}
+                  onEdit={() => handleEditClick(product)}
+                  onDelete={() => handleDeleteProduct(product)}
+                />
               ))}
             </tbody>
           </table>
@@ -428,7 +541,7 @@ function getPublicImageUrl(path: string): string {
     return data.publicUrl;
 }
 
-const ProductRow = ({ product }: { product: ProductWithDetails }) => {
+const ProductRow = ({ product, onEdit, onDelete }: { product: ProductWithDetails, onEdit: () => void, onDelete: () => void }) => {
     // Find the very first image of the first color to show in the table.
     const firstColor = product.product_colors?.[0];
     const showcaseImage = firstColor?.images?.find(img => img.position === 1);
@@ -474,7 +587,20 @@ const ProductRow = ({ product }: { product: ProductWithDetails }) => {
                 {new Date(product.created_at).toLocaleDateString()}
             </td>
             <td className="p-3 border-b border-gray-200 align-top">
-                <button className="text-sm text-gray-500 cursor-not-allowed" disabled>Edit</button>
+                <div className="flex items-center gap-4">
+                    <button 
+                      onClick={onEdit}
+                      className="text-sm text-blue-600 hover:underline"
+                    >
+                      Edit
+                    </button>
+                    <button 
+                      onClick={onDelete} 
+                      className="text-sm text-red-600 hover:underline"
+                    >
+                      Delete
+                    </button>
+                </div>
             </td>
         </tr>
     );
