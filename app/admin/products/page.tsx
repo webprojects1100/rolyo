@@ -185,6 +185,18 @@ export default function AdminProductsPage() {
     }));
   }
 
+  function handleRemoveExistingImage(colorIndex: number, imageId: string) {
+    setProductColors(prev => prev.map((color, cIdx) => {
+        if (cIdx === colorIndex) {
+            return {
+                ...color,
+                existingImages: color.existingImages.filter(img => img.id !== imageId)
+            };
+        }
+        return color;
+    }));
+  }
+
   function handleVariantStockChange(colorIndex: number, variantIndex: number, stock: string) {
     const newStock = parseInt(stock, 10);
     setProductColors(prev => prev.map((color, cIdx) => {
@@ -289,16 +301,26 @@ export default function AdminProductsPage() {
       price: String(product.price),
     });
     
-    // Convert the loaded product data into the format the form expects
-    setProductColors(product.product_colors.map(c => ({
-      id: c.id,
-      name: c.name,
-      hex: c.hex,
-      // Separate existing images from new file uploads
-      existingImages: c.images || [],
-      newImageFiles: [],
-      variants: c.variants.map(v => ({...v})) // Ensure a deep copy
-    })));
+    // Convert loaded data to form format, ensuring all sizes are present for editing
+    setProductColors(product.product_colors.map(c => {
+      // Create a map of existing variants for quick lookup
+      const existingVariants = new Map(c.variants.map(v => [v.size, v.stock]));
+      
+      // Create a full list of variants for the form, using existing stock or defaulting to 0
+      const allVariantsForForm = SIZE_OPTIONS.map(size => ({
+        size: size,
+        stock: existingVariants.get(size) || 0
+      }));
+
+      return {
+        id: c.id,
+        name: c.name,
+        hex: c.hex,
+        existingImages: c.images || [],
+        newImageFiles: [],
+        variants: allVariantsForForm
+      };
+    }));
 
     setShowForm(true);
   }
@@ -311,25 +333,109 @@ export default function AdminProductsPage() {
     setFormLoading(true);
 
     try {
-        // ... (Comprehensive update logic will go here)
-        // This is a placeholder for the complex update logic.
-        // For now, we will just log the intention.
-        console.log("Preparing to update product:", editingProduct.id);
-        console.log("New data:", { form, productColors });
-        
-        // In a real implementation, we would:
-        // 1. Update product table
-        // 2. Diff product_colors to find new, updated, and deleted colors
-        // 3. For each color, diff images to find new and deleted images
-        // 4. Upload/delete images from storage
-        // 5. Insert/update/delete records from `product_colors` and `images` tables
-        // 6. Upsert variants for each color
-        
-        // For this step, we'll just show a success and reset.
-        alert("Product update logic is being implemented. Check console for data.");
+        // 1. Update main product details
+        const { error: productError } = await supabase
+            .from('products')
+            .update({
+                name: form.name.trim(),
+                description: form.description.trim(),
+                price: parseFloat(form.price),
+            })
+            .eq('id', editingProduct.id);
+        if (productError) throw productError;
 
-        await fetchProducts(); // Refetch to ensure data is fresh
-        resetForm(); // Resets form and `editingProduct` state
+        const originalColors = editingProduct.product_colors;
+        const submittedColors = productColors;
+
+        // 2. Identify and delete colors that were removed
+        const submittedColorIds = new Set(submittedColors.map(c => c.id).filter(id => id));
+        const colorsToDelete = originalColors.filter(c => !submittedColorIds.has(c.id));
+        
+        for (const color of colorsToDelete) {
+            const folderPath = `products/${editingProduct.id}/${color.id}`;
+            const { data: files, error: listError } = await supabase.storage.from('product-images').list(folderPath);
+            if (listError) console.error(`Could not list files for deletion for color ${color.name}:`, listError);
+            if (files && files.length > 0) {
+                const filePaths = files.map(file => `${folderPath}/${file.name}`);
+                await supabase.storage.from('product-images').remove(filePaths);
+            }
+            const { error: deleteColorError } = await supabase.from('product_colors').delete().eq('id', color.id);
+            if (deleteColorError) throw new Error(`Failed to delete color ${color.name}: ${deleteColorError.message}`);
+        }
+
+        // 3. Process submitted colors (update existing or create new)
+        for (const color of submittedColors) {
+            let currentColorId = color.id;
+
+            if (!currentColorId) {
+                const { data: newColorData, error: newColorError } = await supabase
+                    .from('product_colors')
+                    .insert({ product_id: editingProduct.id, name: color.name, hex: color.hex })
+                    .select('id')
+                    .single();
+                if (newColorError) throw new Error(`Failed to create new color ${color.name}: ${newColorError.message}`);
+                currentColorId = newColorData.id;
+            } else {
+                const { error: updateColorError } = await supabase
+                    .from('product_colors')
+                    .update({ name: color.name, hex: color.hex })
+                    .eq('id', currentColorId);
+                if (updateColorError) throw new Error(`Failed to update color ${color.name}: ${updateColorError.message}`);
+            }
+            
+            const originalImages = originalColors.find(c => c.id === currentColorId)?.images || [];
+            const existingImageIds = new Set(color.existingImages.map(img => img.id));
+            const imagesToDelete = originalImages.filter(img => !existingImageIds.has(img.id));
+
+            if (imagesToDelete.length > 0) {
+                const imagePathsToDelete = imagesToDelete.map(img => img.image_url);
+                await supabase.storage.from('product-images').remove(imagePathsToDelete);
+                
+                const imageIdsToDelete = imagesToDelete.map(img => img.id);
+                const { error: dbError } = await supabase.from('images').delete().in('id', imageIdsToDelete);
+                if (dbError) throw new Error(`Failed to delete image records from DB: ${dbError.message}`);
+            }
+
+            if (color.newImageFiles.length > 0) {
+                 for (let i = 0; i < color.newImageFiles.length; i++) {
+                    const file = color.newImageFiles[i];
+                    const filePath = `products/${editingProduct.id}/${currentColorId}/${Date.now()}-${file.name}`;
+                    
+                    await supabase.storage.from('product-images').upload(filePath, file);
+                    
+                    const maxPosition = Math.max(0, ...color.existingImages.map(img => img.position));
+                    const { error: dbError } = await supabase.from('images').insert({
+                        product_color_id: currentColorId,
+                        image_url: filePath,
+                        position: maxPosition + i + 1,
+                    });
+                    if (dbError) throw dbError;
+                }
+            }
+
+            const { error: deleteVariantError } = await supabase
+                .from('product_variants')
+                .delete()
+                .eq('product_color_id', currentColorId!);
+            if (deleteVariantError) throw new Error(`Failed to clear old variants for color ${color.name}: ${deleteVariantError.message}`);
+
+            const variantsToInsert = color.variants
+                .filter(v => v.stock > 0)
+                .map(v => ({
+                    product_color_id: currentColorId!,
+                    size: v.size,
+                    stock: v.stock,
+                }));
+            
+            if (variantsToInsert.length > 0) {
+                const { error: insertVariantError } = await supabase.from('product_variants').insert(variantsToInsert);
+                if (insertVariantError) throw new Error(`Failed to insert new variants for color ${color.name}: ${insertVariantError.message}`);
+            }
+        }
+
+        await fetchProducts();
+        resetForm();
+
     } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
         setFormError(`Failed to update product: ${errorMessage}`);
@@ -450,8 +556,21 @@ export default function AdminProductsPage() {
                       
                       {/* Per-Color Image Uploader */}
                       <div className="mb-4 p-4 border-2 border-dashed rounded-lg">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Upload Images for {color.name}</label>
-              <input
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Images for {color.name}</label>
+                        
+                        {color.existingImages.length > 0 && (
+                            <div className="flex gap-4 mb-4 flex-wrap border-b pb-4">
+                                {color.existingImages.map((image) => (
+                                    <div key={image.id} className="relative">
+                                        <Image src={getPublicImageUrl(image.image_url)} alt="Existing product image" width={100} height={100} className="rounded object-cover" />
+                                        <button type="button" onClick={() => handleRemoveExistingImage(colorIdx, image.id)} className="absolute top-0 right-0 bg-red-500 text-white rounded-full text-xs w-5 h-5 flex items-center justify-center -mt-1 -mr-1">&times;</button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Upload New Images</label>
+                        <input
                           type="file" 
                           multiple 
                           onChange={(e) => handleColorImageChange(colorIdx, e)} 
@@ -463,11 +582,11 @@ export default function AdminProductsPage() {
                               <div key={imgIdx} className="relative">
                                   <Image src={URL.createObjectURL(file)} alt="Preview" width={100} height={100} className="rounded object-cover" />
                                   <button type="button" onClick={() => handleRemoveColorImage(colorIdx, imgIdx)} className="absolute top-0 right-0 bg-red-500 text-white rounded-full text-xs w-5 h-5 flex items-center justify-center -mt-1 -mr-1">&times;</button>
-                      </div>
+                              </div>
                           ))}
                         </div>
-                        <p className="text-xs text-gray-500 mt-2">The first image will be the primary showcase image.</p>
-              </div>
+                        <p className="text-xs text-gray-500 mt-2">The first image uploaded becomes the primary showcase image.</p>
+                      </div>
 
                       {/* Stock per Size Inputs */}
                       <div>
@@ -498,7 +617,7 @@ export default function AdminProductsPage() {
             <div className="flex justify-end gap-4 mt-8">
                 <button type="button" onClick={() => setShowForm(false)} className="bg-gray-300 text-gray-800 px-6 py-2 rounded hover:bg-gray-400">Cancel</button>
                 <button type="submit" className="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 disabled:bg-gray-400" disabled={formLoading}>
-                    {formLoading ? 'Saving...' : 'Save Product'}
+                    {formLoading ? 'Saving...' : (editingProduct ? 'Update Product' : 'Save Product')}
               </button>
             </div>
           </form>
