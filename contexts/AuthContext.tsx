@@ -19,28 +19,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchSessionAndCheckAdmin = async (currentUser: User | null) => {
-      setUser(currentUser);
-      if (currentUser) {
-        const adminStatus = await checkIsAdmin(currentUser.id);
+    // Check the initial session
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        const adminStatus = await checkIsAdmin(session.user.id);
         setIsAdmin(adminStatus);
       } else {
         setIsAdmin(false);
       }
       setLoading(false);
-    };
+    });
 
-    const initialize = async () => {
-      setLoading(true);
-      const { data: { session } } = await supabase.auth.getSession();
-      await fetchSessionAndCheckAdmin(session?.user ?? null);
-    };
-
-    initialize();
-
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setLoading(true);
-      await fetchSessionAndCheckAdmin(session?.user ?? null);
+    // Listen for future auth changes
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        // You might want to re-check admin status here if it can change
+        const adminStatus = await checkIsAdmin(session.user.id);
+        setIsAdmin(adminStatus);
+      } else {
+        setIsAdmin(false);
+      }
+      // No setLoading(true) here, to avoid flashing loading screens on token refresh
     });
 
     return () => {
