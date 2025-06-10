@@ -2,9 +2,9 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { z } from 'zod';
-import { isAdmin } from "@/lib/utils";
 import Link from 'next/link';
-import { useAuth } from "../../contexts/AuthContext"; 
+import { useAuth } from "@/contexts/AuthContext"; 
+import { Package, ClipboardList } from 'lucide-react';
 
 const signupSchema = z.object({
   email: z.string().email('Invalid email'),
@@ -12,7 +12,7 @@ const signupSchema = z.object({
 });
 
 export default function UserDashboard() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, isAdmin, loading: authLoading } = useAuth();
   const [orders, setOrders] = useState<{ id: string; created_at: string; status: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState('');
@@ -39,55 +39,53 @@ export default function UserDashboard() {
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [profileSuccess, setProfileSuccess] = useState('');
-  const [isAdminUser, setIsAdminUser] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
 
   useEffect(() => {
-    async function fetchProfileAndOrders() {
-      if (user) {
-        setLoading(true);
-        
-        // Check if user is admin
-        const adminStatus = await isAdmin(user.id);
-        setIsAdminUser(adminStatus);
+    // A single effect to handle all data loading for the authenticated user.
+    // It runs when authLoading completes or the user object changes.
+    if (authLoading) {
+      setLoading(true);
+      return;
+    }
 
-        // Fetch profile data
-        const { data: profileData, error: profileFetchError } = await supabase
+    if (user) {
+      setLoading(true);
+      Promise.all([
+        // Fetch profile
+        supabase
           .from('profiles')
           .select('name, address, phone, postalCode')
           .eq('id', user.id)
-          .single();
-
-        if (profileData) {
-          setProfile(profileData);
-        }
-        if (profileFetchError && profileFetchError.code !== 'PGRST116') {
-          console.error('Error fetching profile:', profileFetchError);
-          setProfileError('Could not load profile data.');
-        }
-
-        // Fetch orders for this user
-        const { data: ordersData, error: ordersError } = await supabase
+          .single(),
+        // Fetch orders
+        supabase
           .from("orders")
           .select("id, created_at, status")
           .eq('user_id', user.id)
-          .order("created_at", { ascending: false });
+          .order("created_at", { ascending: false })
+      ]).then(([{ data: profileData, error: profileError }, { data: ordersData, error: ordersError }]) => {
+        if (profileError && profileError.code !== 'PGRST116') {
+          console.error('Error fetching profile:', profileError);
+          setProfileError('Could not load profile data.');
+        } else if (profileData) {
+          setProfile(profileData);
+        }
 
         if (ordersError) {
           console.error('Error fetching orders:', ordersError);
-          // Handle order fetch error if needed
         } else {
           setOrders(ordersData || []);
         }
+      }).finally(() => {
         setLoading(false);
-      } else {
-        if (!authLoading) {
-          setLoading(false);
-        }
-      }
+      });
+    } else {
+      // If no user and auth is not loading, we are done.
+      setLoading(false);
+      setOrders([]);
+      setProfile({ name: null, address: null, phone: null, postalCode: null });
     }
-
-    fetchProfileAndOrders();
   }, [user, authLoading]);
 
   const handleProfileUpdate = async (e: React.FormEvent) => {
@@ -270,150 +268,163 @@ export default function UserDashboard() {
   );
 
   return (
-    <div className="max-w-2xl mx-auto py-10 px-4">
-      <h1 className="text-2xl font-bold mb-6">My Account</h1>
-      
-      {/* Admin Dashboard Link (conditionally rendered) */}
-      {isAdminUser && (
-        <div className="mb-6">
-          <Link 
-            href="/admin"
-            className="inline-block bg-indigo-600 text-white rounded px-6 py-3 font-semibold hover:bg-indigo-700 transition shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50"
-          >
-            Go to Admin Dashboard
-          </Link>
+    <div className="max-w-4xl mx-auto py-10 px-4 space-y-12">
+
+      {/* ADMIN PANEL SECTION - Conditionally Rendered */}
+      {isAdmin && (
+        <div className="p-6 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <h2 className="text-2xl font-bold mb-4">Admin Panel</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Link href="/admin/products" className="block p-4 bg-white rounded-lg border shadow-sm hover:bg-gray-50 transition-colors">
+              <div className="flex items-center gap-3">
+                <Package className="w-6 h-6 text-gray-600" />
+                <h3 className="text-lg font-semibold">Manage Products</h3>
+              </div>
+            </Link>
+            <Link href="/admin/orders" className="block p-4 bg-white rounded-lg border shadow-sm hover:bg-gray-50 transition-colors">
+              <div className="flex items-center gap-3">
+                <ClipboardList className="w-6 h-6 text-gray-600" />
+                <h3 className="text-lg font-semibold">Manage Orders</h3>
+              </div>
+            </Link>
+          </div>
         </div>
       )}
 
-      {/* Profile Info & Edit Form */}
-      <div className="mb-8 p-6 border rounded-lg bg-white shadow-sm">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold text-gray-800">Profile Information</h2>
-          {!isEditingProfile && (
-            <button
-              onClick={() => {
-                setIsEditingProfile(true);
-                setProfileError('');
-                setProfileSuccess('');
-              }}
-              className="bg-gray-200 text-gray-700 rounded px-4 py-2 font-medium hover:bg-gray-300 transition text-sm"
-            >
-              Edit Profile
-            </button>
+      {/* USER PROFILE SECTION */}
+      <div className="p-6 bg-white border rounded-lg">
+        <h2 className="text-2xl font-bold mb-6">My Profile</h2>
+        
+        {/* Profile Info & Edit Form */}
+        <div className="mb-8 p-6 border rounded-lg bg-white shadow-sm">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold text-gray-800">Profile Information</h2>
+            {!isEditingProfile && (
+              <button
+                onClick={() => {
+                  setIsEditingProfile(true);
+                  setProfileError('');
+                  setProfileSuccess('');
+                }}
+                className="bg-gray-200 text-gray-700 rounded px-4 py-2 font-medium hover:bg-gray-300 transition text-sm"
+              >
+                Edit Profile
+              </button>
+            )}
+          </div>
+
+          {isEditingProfile ? (
+            <form onSubmit={handleProfileUpdate} className="space-y-4">
+              <div>
+                <label htmlFor="profileName" className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                <input 
+                  type="text" 
+                  id="profileName"
+                  placeholder="Your Full Name"
+                  value={profile.name || ''} 
+                  onChange={(e) => setProfile({...profile, name: e.target.value})}
+                  className="border rounded px-3 py-2 w-full focus:ring-indigo-500 focus:border-indigo-500"
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="profileAddress" className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                <input 
+                  type="text"
+                  id="profileAddress"
+                  placeholder="Street Address, P.O. Box, etc."
+                  value={profile.address || ''} 
+                  onChange={(e) => setProfile({...profile, address: e.target.value})}
+                  className="border rounded px-3 py-2 w-full focus:ring-indigo-500 focus:border-indigo-500"
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="profilePostalCode" className="block text-sm font-medium text-gray-700 mb-1">Postal Code</label>
+                <input 
+                  type="text" 
+                  id="profilePostalCode"
+                  placeholder="Your Postal Code"
+                  value={profile.postalCode || ''} 
+                  onChange={(e) => setProfile({...profile, postalCode: e.target.value})}
+                  className="border rounded px-3 py-2 w-full focus:ring-indigo-500 focus:border-indigo-500"
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="profilePhone" className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                <input 
+                  type="text" 
+                  id="profilePhone"
+                  placeholder="Your Phone Number"
+                  value={profile.phone || ''} 
+                  onChange={(e) => setProfile({...profile, phone: e.target.value})}
+                  className="border rounded px-3 py-2 w-full focus:ring-indigo-500 focus:border-indigo-500"
+                  required
+                />
+              </div>
+              {profileError && <div className="text-red-600 text-sm">{profileError}</div>}
+              {profileSuccess && <div className="text-green-600 text-sm">{profileSuccess}</div>}
+              <div className="flex gap-3 pt-2">
+                <button 
+                  type="submit" 
+                  className="bg-black text-white rounded px-6 py-2 font-semibold hover:bg-gray-800 transition"
+                  disabled={profileLoading}
+                >
+                  {profileLoading ? 'Saving...' : 'Save Changes'}
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setIsEditingProfile(false)}
+                  className="bg-gray-200 text-gray-700 rounded px-6 py-2 font-medium hover:bg-gray-300 transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="space-y-3 text-sm text-gray-700">
+              <div>
+                <span className="font-medium text-gray-900">Full Name:</span>
+                <p>{profile.name || <span className="text-gray-400">Not set</span>}</p>
+              </div>
+              <div>
+                <span className="font-medium text-gray-900">Address:</span>
+                <p>{profile.address || <span className="text-gray-400">Not set</span>}</p>
+              </div>
+              <div>
+                <span className="font-medium text-gray-900">Postal Code:</span>
+                <p>{profile.postalCode || <span className="text-gray-400">Not set</span>}</p>
+              </div>
+              <div>
+                <span className="font-medium text-gray-900">Phone:</span>
+                <p>{profile.phone || <span className="text-gray-400">Not set</span>}</p>
+              </div>
+              {profileError && <div className="text-red-600 text-sm mt-2">{profileError}</div>}
+              {profileSuccess && <div className="text-green-600 text-sm mt-2">{profileSuccess}</div>}
+            </div>
           )}
+          <div className="mt-4 text-sm text-gray-600"><span className="font-medium">Email:</span> {user.email}</div>
         </div>
 
-        {isEditingProfile ? (
-          <form onSubmit={handleProfileUpdate} className="space-y-4">
-            <div>
-              <label htmlFor="profileName" className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-              <input 
-                type="text" 
-                id="profileName"
-                placeholder="Your Full Name"
-                value={profile.name || ''} 
-                onChange={(e) => setProfile({...profile, name: e.target.value})}
-                className="border rounded px-3 py-2 w-full focus:ring-indigo-500 focus:border-indigo-500"
-                required
-              />
-            </div>
-            <div>
-              <label htmlFor="profileAddress" className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-              <input 
-                type="text"
-                id="profileAddress"
-                placeholder="Street Address, P.O. Box, etc."
-                value={profile.address || ''} 
-                onChange={(e) => setProfile({...profile, address: e.target.value})}
-                className="border rounded px-3 py-2 w-full focus:ring-indigo-500 focus:border-indigo-500"
-                required
-              />
-            </div>
-            <div>
-              <label htmlFor="profilePostalCode" className="block text-sm font-medium text-gray-700 mb-1">Postal Code</label>
-              <input 
-                type="text" 
-                id="profilePostalCode"
-                placeholder="Your Postal Code"
-                value={profile.postalCode || ''} 
-                onChange={(e) => setProfile({...profile, postalCode: e.target.value})}
-                className="border rounded px-3 py-2 w-full focus:ring-indigo-500 focus:border-indigo-500"
-                required
-              />
-            </div>
-            <div>
-              <label htmlFor="profilePhone" className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-              <input 
-                type="text" 
-                id="profilePhone"
-                placeholder="Your Phone Number"
-                value={profile.phone || ''} 
-                onChange={(e) => setProfile({...profile, phone: e.target.value})}
-                className="border rounded px-3 py-2 w-full focus:ring-indigo-500 focus:border-indigo-500"
-                required
-              />
-            </div>
-            {profileError && <div className="text-red-600 text-sm">{profileError}</div>}
-            {profileSuccess && <div className="text-green-600 text-sm">{profileSuccess}</div>}
-            <div className="flex gap-3 pt-2">
-              <button 
-                type="submit" 
-                className="bg-black text-white rounded px-6 py-2 font-semibold hover:bg-gray-800 transition"
-                disabled={profileLoading}
-              >
-                {profileLoading ? 'Saving...' : 'Save Changes'}
-              </button>
-              <button 
-                type="button"
-                onClick={() => setIsEditingProfile(false)}
-                className="bg-gray-200 text-gray-700 rounded px-6 py-2 font-medium hover:bg-gray-300 transition"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        ) : (
-          <div className="space-y-3 text-sm text-gray-700">
-            <div>
-              <span className="font-medium text-gray-900">Full Name:</span>
-              <p>{profile.name || <span className="text-gray-400">Not set</span>}</p>
-            </div>
-            <div>
-              <span className="font-medium text-gray-900">Address:</span>
-              <p>{profile.address || <span className="text-gray-400">Not set</span>}</p>
-            </div>
-            <div>
-              <span className="font-medium text-gray-900">Postal Code:</span>
-              <p>{profile.postalCode || <span className="text-gray-400">Not set</span>}</p>
-            </div>
-            <div>
-              <span className="font-medium text-gray-900">Phone:</span>
-              <p>{profile.phone || <span className="text-gray-400">Not set</span>}</p>
-            </div>
-            {profileError && <div className="text-red-600 text-sm mt-2">{profileError}</div>}
-            {profileSuccess && <div className="text-green-600 text-sm mt-2">{profileSuccess}</div>}
-          </div>
-        )}
-        <div className="mt-4 text-sm text-gray-600"><span className="font-medium">Email:</span> {user.email}</div>
-      </div>
-
-      {/* Order History */}
-      <div className="mb-8 p-6 border rounded-lg bg-white shadow-sm">
-        <h2 className="text-xl font-semibold mb-4 text-gray-800">Order History</h2>
-        {orders.length === 0 ? (
-          <div className="text-gray-500">No orders found.</div>
-        ) : (
-          <ul className="space-y-4">
-            {orders.map((order) => (
-              <li key={order.id} className="border-b pb-2">
-                <div className="font-medium">Order #{order.id.slice(0, 8)}...</div>
-                <div className="text-sm text-gray-600">Placed: {new Date(order.created_at).toLocaleString()}</div>
-                <div className="text-sm">Status: <span className="font-semibold">{order.status}</span></div>
-                {/* You can display order items, shipping, etc. here */}
-              </li>
-            ))}
-          </ul>
-        )}
+        {/* Order History */}
+        <div className="mb-8 p-6 border rounded-lg bg-white shadow-sm">
+          <h2 className="text-xl font-semibold mb-4 text-gray-800">Order History</h2>
+          {orders.length === 0 ? (
+            <div className="text-gray-500">No orders found.</div>
+          ) : (
+            <ul className="space-y-4">
+              {orders.map((order) => (
+                <li key={order.id} className="border-b pb-2">
+                  <div className="font-medium">Order #{order.id.slice(0, 8)}...</div>
+                  <div className="text-sm text-gray-600">Placed: {new Date(order.created_at).toLocaleString()}</div>
+                  <div className="text-sm">Status: <span className="font-semibold">{order.status}</span></div>
+                  {/* You can display order items, shipping, etc. here */}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </div>
   );
