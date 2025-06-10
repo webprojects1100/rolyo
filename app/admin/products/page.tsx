@@ -2,7 +2,7 @@
 import { useEffect, useState, ChangeEvent } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
-import { isAdmin } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 const SIZE_OPTIONS = ['S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
 
@@ -50,9 +50,9 @@ interface FormProductColor extends Omit<ProductColor, 'images'> {
 
 // --- Component ---
 export default function AdminProductsPage() {
-  const [loading, setLoading] = useState(true);
-  const [admin, setAdmin] = useState(false);
+  const { isAdmin, loading: authLoading } = useAuth();
   const [products, setProducts] = useState<ProductWithDetails[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   
   // --- FORM STATE ---
@@ -67,40 +67,16 @@ export default function AdminProductsPage() {
   // --- NEW STATE for editing ---
   const [editingProduct, setEditingProduct] = useState<ProductWithDetails | null>(null);
   
-  // --- Main Effect ---
+  // --- Refactored Main Effect ---
   useEffect(() => {
-    setLoading(true);
-    const checkAdminAndFetch = async (user: import('@supabase/supabase-js').User | null) => {
-      try {
-        if (user && await isAdmin(user.id)) {
-          setAdmin(true);
-          await fetchProducts();
-        } else {
-          setAdmin(false);
-          setProducts([]);
-        }
-      } catch (error) {
-        console.error("Error in checkAdminAndFetch:", error);
-        setAdmin(false);
-        setProducts([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      checkAdminAndFetch(user);
-    });
-
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setLoading(true);
-      checkAdminAndFetch(session?.user ?? null);
-    });
-
-    return () => {
-      authListener?.subscription.unsubscribe();
-    };
-  }, []);
+    if (isAdmin) {
+      setDataLoading(true);
+      fetchProducts().finally(() => setDataLoading(false));
+    } else {
+      setProducts([]);
+      setDataLoading(false);
+    }
+  }, [isAdmin]);
 
   // --- DATA FETCHING ---
   async function fetchProducts() {
@@ -500,8 +476,12 @@ export default function AdminProductsPage() {
   }
   
   // --- Render Logic ---
-  if (loading) return <div className="flex justify-center items-center h-screen"><p>Loading...</p></div>;
-  if (!admin) return <div className="flex justify-center items-center h-screen"><p>You are not authorized to view this page.</p></div>;
+  if (authLoading || dataLoading) {
+    return <div className="flex justify-center items-center h-screen"><p>Loading...</p></div>;
+  }
+  if (!isAdmin) {
+    return <div className="flex justify-center items-center h-screen"><p>You are not authorized to view this page.</p></div>;
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
