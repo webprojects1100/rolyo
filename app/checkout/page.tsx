@@ -130,7 +130,7 @@ export default function CheckoutPage() {
         ) : (
           <div className="space-y-4">
             {cart.map((item) => (
-              <div key={item.id + item.size} className="flex items-center gap-4 border-b pb-2">
+              <div key={item.variantId} className="flex items-center gap-4 border-b pb-2">
                 <Image src={item.imageUrl} alt={item.name} width={60} height={60} className="rounded object-cover" />
                 <div className="flex-1">
                   <div className="font-semibold">{item.name}</div>
