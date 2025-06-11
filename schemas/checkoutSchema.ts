@@ -8,12 +8,13 @@ export const ShippingSchema = z.object({
 });
 
 export const CartItemSchema = z.object({
-  id: z.string(),
+  productId: z.string(),
   variantId: z.string(),
   name: z.string(),
   price: z.number().nonnegative(),
   imageUrl: z.string(),
   size: z.string(),
+  color: z.string(),
   quantity: z.number().int().positive(),
   stock: z.number().int().nonnegative(),
 });
