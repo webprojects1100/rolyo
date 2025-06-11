@@ -9,6 +9,7 @@ export const ShippingSchema = z.object({
 
 export const CartItemSchema = z.object({
   id: z.string(),
+  variantId: z.string(),
   name: z.string(),
   price: z.number().nonnegative(),
   imageUrl: z.string(),
