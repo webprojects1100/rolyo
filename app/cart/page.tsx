@@ -13,7 +13,7 @@ export default function CartPage() {
 
   // The handler now only needs the variantId and new quantity
   const handleQuantityChange = (variantId: string, newQuantity: number) => {
-    const item = cart.find(i => i.id === variantId);
+    const item = cart.find(i => i.variantId === variantId);
     if (!item) return;
 
     // Clamp the quantity between 1 and the available stock
@@ -36,7 +36,7 @@ export default function CartPage() {
       ) : (
         <div className="space-y-6">
           {cart.map((item) => (
-            <div key={item.id} className="flex items-center gap-4 border-b pb-4">
+            <div key={item.variantId} className="flex items-center gap-4 border-b pb-4">
               <Link href={`/product/${item.productId}`}>
                 <Image src={item.imageUrl} alt={item.name} width={80} height={80} className="rounded object-cover" />
               </Link>
@@ -45,10 +45,10 @@ export default function CartPage() {
                 <div className="text-sm text-gray-500">Color: {item.color}</div>
                 <div className="text-sm text-gray-500">Size: {item.size}</div>
                 <div className="flex items-center gap-2 mt-2">
-                  <button onClick={() => handleQuantityChange(item.id, item.quantity - 1)} disabled={item.quantity <= 1} className="border px-2 rounded">-</button>
+                  <button onClick={() => handleQuantityChange(item.variantId, item.quantity - 1)} disabled={item.quantity <= 1} className="border px-2 rounded">-</button>
                   <span className="w-10 text-center">{item.quantity}</span>
                   <button
-                    onClick={() => handleQuantityChange(item.id, item.quantity + 1)}
+                    onClick={() => handleQuantityChange(item.variantId, item.quantity + 1)}
                     className="border px-2 rounded"
                     disabled={item.quantity >= item.stock}
                   >
@@ -58,7 +58,7 @@ export default function CartPage() {
               </div>
               <div className="font-semibold">₱{(item.price * item.quantity).toFixed(2)}</div>
               <button
-                onClick={() => handleRemove(item.id)}
+                onClick={() => handleRemove(item.variantId)}
                 className="text-red-500 hover:text-red-700 ml-4 transition-colors"
               >
                 Remove
