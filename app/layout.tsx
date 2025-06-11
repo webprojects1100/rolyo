@@ -38,8 +38,8 @@ export default function RootLayout({
               <Navbar />
               <main className="flex-grow">
                 {children}
-                <SubscribeSection />
               </main>
+              <SubscribeSection />
               <Footer />
             </div>
           </AuthProvider>
