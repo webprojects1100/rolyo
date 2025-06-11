@@ -473,6 +473,7 @@ export default function AdminProductsPage() {
     setShowForm(false);
     setFormError("");
     setFormLoading(false);
+    setEditingProduct(null);
   }
   
   // --- Render Logic ---
