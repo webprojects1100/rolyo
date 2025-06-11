@@ -31,7 +31,7 @@ export default function ProductPurchaseBox({ product, selectedVariant }: Product
     const showcaseImage = color?.images?.find(img => img.position === 1) || color?.images?.[0];
 
     addToCart({
-      id: selectedVariant.id, // The variant's ID is the unique identifier in the cart
+      variantId: selectedVariant.id, // This is the unique variant ID
       productId: product.id,
       name: product.name,
       price: product.price,
