@@ -23,37 +23,41 @@ export default function CheckoutPage() {
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
   useEffect(() => {
-    async function fetchProfile() {
-      if (user) {
-        setProfileLoading(true);
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('name, address, phone, postalCode')
-          .eq('id', user.id)
-          .single();
-        
-        if (profileData) {
-          setShipping(prevShipping => ({
-            ...prevShipping,
-            name: profileData.name || prevShipping.name,
-            address: profileData.address || prevShipping.address,
-            phone: profileData.phone || prevShipping.phone,
-            postalCode: profileData.postalCode || prevShipping.postalCode,
-          }));
-        }
-        if (profileError && profileError.code !== 'PGRST116') {
-          console.error("Error fetching profile for checkout:", profileError);
-        }
-        setProfileLoading(false);
-      } else {
-        // If there's no user, we are not loading a profile.
-        setProfileLoading(false);
-      }
+    if (authLoading) {
+      setProfileLoading(true);
+      return;
     }
 
-    // Fetch profile only when auth is done loading and we have a user.
-    if (!authLoading) {
-      fetchProfile();
+    if (user) {
+      setProfileLoading(true);
+      supabase
+        .from('profiles')
+        .select('name, address, phone, postalCode')
+        .eq('id', user.id)
+        .single()
+        .then(
+          ({ data: profileData, error: profileError }) => {
+            if (profileData) {
+              setShipping(prev => ({
+                ...prev,
+                name: profileData.name || '',
+                address: profileData.address || '',
+                phone: profileData.phone || '',
+                postalCode: profileData.postalCode || '',
+              }));
+            }
+            if (profileError && profileError.code !== 'PGRST116') {
+              console.error("Error fetching profile for checkout:", profileError);
+            }
+            setProfileLoading(false);
+          },
+          (error) => {
+            console.error("Unhandled promise rejection:", error);
+            setProfileLoading(false);
+          }
+        );
+    } else {
+      setProfileLoading(false);
     }
   }, [user, authLoading]);
 
