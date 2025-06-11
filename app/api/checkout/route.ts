@@ -55,19 +55,20 @@ export async function POST(req: NextRequest) {
   }
 
   for (const item of cart) {
-    const { data: sizeRecord, error: stockError } = await supabase
-      .from('sizes')
+    // Validate stock using the unique variant ID
+    const { data: variantRecord, error: stockError } = await supabase
+      .from('product_variants')
       .select('stock')
-      .eq('product_id', item.id)
-      .eq('size', item.size)
+      .eq('id', item.variantId) // Use variantId from the cart item
       .single();
 
-    if (stockError || !sizeRecord) {
-      console.error(`Stock validation error for ${item.name} (${item.size}):`, stockError);
+    if (stockError || !variantRecord) {
+      console.error(`Stock validation error for ${item.name} (${item.size}, Variant: ${item.variantId}):`, stockError);
       return NextResponse.json({ error: `Could not validate stock for ${item.name} (${item.size})` }, { status: 400 });
     }
-    if (item.quantity > sizeRecord.stock) {
-      return NextResponse.json({ error: `Not enough stock for ${item.name} (${item.size}). Only ${sizeRecord.stock} left.` }, { status: 400 });
+
+    if (item.quantity > variantRecord.stock) {
+      return NextResponse.json({ error: `Not enough stock for ${item.name} (${item.size}). Only ${variantRecord.stock} left.` }, { status: 400 });
     }
   }
 
@@ -95,23 +96,23 @@ export async function POST(req: NextRequest) {
   }
 
   for (const item of cart) {
-    const { data: sizeData, error: sizeError } = await supabase
-      .from('sizes')
+    const { data: variantRecord, error: fetchError } = await supabase
+      .from('product_variants')
       .select('stock')
-      .eq('product_id', item.id)
-      .eq('size', item.size)
+      .eq('id', item.variantId)
       .single();
 
-    if (!sizeError && sizeData) {
-      const newStock = sizeData.stock - item.quantity;
+    if (!fetchError && variantRecord) {
+      const newStock = variantRecord.stock - item.quantity;
       const { error: stockUpdateError } = await supabase
-        .from('sizes')
+        .from('product_variants')
         .update({ stock: newStock })
-        .eq('product_id', item.id)
-        .eq('size', item.size);
+        .eq('id', item.variantId);
       
       if (stockUpdateError) {
-        console.error(`Failed to update stock for ${item.name} (${item.size}):`, stockUpdateError);
+        // Log the error but don't fail the entire order, as the payment has already been processed.
+        // This should be handled by a reconciliation process.
+        console.error(`Failed to update stock for ${item.name} (${item.size}, Variant: ${item.variantId}):`, stockUpdateError);
       }
     }
   }
