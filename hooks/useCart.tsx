@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
 export interface CartItem {
-  id: string;
+  variantId: string;
   productId: string;
   name: string;
   price: number;
@@ -39,10 +39,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const addToCart = (itemToAdd: CartItem) => {
     setCart((prev) => {
-      const existing = prev.find((i) => i.id === itemToAdd.id);
+      const existing = prev.find((i) => i.variantId === itemToAdd.variantId);
       if (existing) {
         return prev.map((i) =>
-          i.id === itemToAdd.id
+          i.variantId === itemToAdd.variantId
             ? { ...i, quantity: i.quantity + itemToAdd.quantity }
             : i
         );
@@ -53,13 +53,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
   };
 
   const removeFromCart = (variantId: string) => {
-    setCart((prev) => prev.filter((item) => item.id !== variantId));
+    setCart((prev) => prev.filter((item) => item.variantId !== variantId));
   };
 
   const updateQuantity = (variantId: string, quantity: number) => {
     setCart((prev) =>
       prev.map((item) =>
-        item.id === variantId ? { ...item, quantity: Math.max(0, quantity) } : item
+        item.variantId === variantId ? { ...item, quantity: Math.max(0, quantity) } : item
       ).filter(item => item.quantity > 0)
     );
   };
