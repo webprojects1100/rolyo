@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import '@/styles/globals.css';  // Adjusted import to reflect new location of globals.css
 import Navbar from '@/components/layout/Navbar';
-import { CartProvider } from '@/hooks/useCart';
-import { AuthProvider } from '@/contexts/AuthContext';
+import { AppProviders } from "./providers"; // Import the new AppProviders
 import Footer from '@/components/layout/Footer'; // Importing Footer component
 import SubscribeSection from '@/components/layout/SubscribeSection';
 
@@ -32,18 +31,16 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-white text-gray-900`}
       >
-        <CartProvider>
-          <AuthProvider>
-            <div className="flex flex-col min-h-screen">
-              <Navbar />
-              <main className="flex-grow">
-                {children}
-              </main>
-              <SubscribeSection />
-              <Footer />
-            </div>
-          </AuthProvider>
-        </CartProvider>
+        <AppProviders>
+          <div className="flex flex-col min-h-screen">
+            <Navbar />
+            <main className="flex-grow">
+              {children}
+            </main>
+            <SubscribeSection />
+            <Footer />
+          </div>
+        </AppProviders>
       </body>
     </html>
   );
