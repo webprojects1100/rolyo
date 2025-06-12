@@ -113,19 +113,19 @@ export default function UserDashboard() {
     }
     console.log("Attempting to update profile for user ID:", user.id);
 
-    const { error: updateError } = await supabase
+    const { error: upsertError } = await supabase
       .from('profiles')
-      .update({ 
+      .upsert({ 
+        id: user.id, // Include the user's ID to identify the record
         name: profile.name,
         address: profile.address,
         phone: profile.phone,
         postalCode: profile.postalCode
-      })
-      .eq('id', user.id);
+      });
 
-    if (updateError) {
-      console.error("Supabase update error:", updateError);
-      setProfileError(updateError.message);
+    if (upsertError) {
+      console.error("Supabase upsert error:", upsertError);
+      setProfileError(upsertError.message);
     } else {
       setProfileSuccess('Profile updated successfully!');
       setIsEditingProfile(false); 
