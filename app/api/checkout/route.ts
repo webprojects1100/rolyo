@@ -13,7 +13,7 @@ interface OrderPayload {
   items: CartItem[];
   created_at: string;
   status: string;
-  total_amount: number;
+  totalAmount: number;
   user_id?: string;
 }
 
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
     items: cart,
     created_at: new Date().toISOString(),
     status: 'pending',
-    total_amount: totalAmount,
+    totalAmount: totalAmount,
   };
 
   if (user) {
