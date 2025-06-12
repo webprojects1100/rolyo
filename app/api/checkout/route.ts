@@ -13,8 +13,6 @@ interface OrderPayload {
   items: CartItem[];
   created_at: string;
   status: string;
-  total_amount: number;
-  totalAmount?: number;
   user_id?: string;
 }
 
@@ -44,15 +42,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Cart is empty' }, { status: 400 });
   }
 
-  let totalAmount = 0;
-  for (const item of cart) { // No need to cast cart, it's already CartItem[]
+  for (const item of cart) {
     if (typeof item.price !== 'number' || typeof item.quantity !== 'number') {
       console.error("Invalid item in cart (price/quantity not a number):", item);
       return NextResponse.json({ error: `Invalid item in cart: ${item.name}. Price or quantity is not a number.` }, { status: 400 });
     }
     // Ensure stock is a number if it's used in calculation (though not for totalAmount here)
     // if (typeof item.stock !== 'number') { ... }
-    totalAmount += item.price * item.quantity;
+    // You can calculate total here if needed in the future
   }
 
   for (const item of cart) {
@@ -79,7 +76,6 @@ export async function POST(req: NextRequest) {
     items: cart,
     created_at: new Date().toISOString(),
     status: 'pending',
-    total_amount: totalAmount,
   };
 
   if (user) {
