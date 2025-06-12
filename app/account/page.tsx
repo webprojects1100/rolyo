@@ -42,54 +42,61 @@ export default function UserDashboard() {
   const [isEditingProfile, setIsEditingProfile] = useState(false);
 
   useEffect(() => {
-    // This new effect is simpler and more robust.
-    // It triggers ONLY when the user object itself changes.
-    if (user) {
-      setLoading(true); // Start loading when we have a user
-      
-      const fetchUserData = async () => {
-        try {
-          const [profileRes, ordersRes] = await Promise.all([
-            supabase
-              .from('profiles')
-              .select('name, address, phone, postalCode')
-              .eq('id', user.id)
-              .single(),
-            supabase
-              .from("orders")
-              .select("id, created_at, status")
-              .eq('user_id', user.id)
-              .order("created_at", { ascending: false })
-          ]);
-
-          const { data: profileData, error: profileError } = profileRes;
-          if (profileError && profileError.code !== 'PGRST116') {
-            throw new Error(`Failed to fetch profile: ${profileError.message}`);
-          }
-          if (profileData) setProfile(profileData);
-
-          const { data: ordersData, error: ordersError } = ordersRes;
-          if (ordersError) {
-            throw new Error(`Failed to fetch orders: ${ordersError.message}`);
-          }
-          setOrders(ordersData || []);
-
-        } catch (error) {
-          console.error("Error fetching user data:", error);
-          setProfileError(error instanceof Error ? error.message : "An unknown error occurred.");
-        } finally {
-          setLoading(false); // Stop loading regardless of outcome
-        }
-      };
-
-      fetchUserData();
-
-    } else if (!authLoading) {
-      // If there's no user and auth is finished, we're not loading.
-      setLoading(false);
-      setOrders([]);
-      setProfile({ name: null, address: null, phone: null, postalCode: null });
+    // If auth is still loading, ensure the page shows a loading state and wait.
+    if (authLoading) {
+      setLoading(true);
+      return;
     }
+
+    // If auth is done and there is NO user, clear all local state and stop.
+    if (!user) {
+      setProfile({ name: null, address: null, phone: null, postalCode: null });
+      setOrders([]);
+      setLoading(false); // No data to load.
+      setProfileError(''); // Clear any previous errors
+      setProfileSuccess(''); // Clear any previous success messages
+      return;
+    }
+
+    // If we reach here, auth is done and we HAVE a user. Fetch their data.
+    setLoading(true);
+    const fetchUserData = async () => {
+      try {
+        const [profileRes, ordersRes] = await Promise.all([
+          supabase
+            .from('profiles')
+            .select('name, address, phone, postalCode')
+            .eq('id', user.id)
+            .single(),
+          supabase
+            .from("orders")
+            .select("id, created_at, status")
+            .eq('user_id', user.id)
+            .order("created_at", { ascending: false })
+        ]);
+
+        const { data: profileData, error: profileError } = profileRes;
+        // It's okay if a profile doesn't exist yet (PGRST116), so we only throw for other errors.
+        if (profileError && profileError.code !== 'PGRST116') {
+          throw new Error(`Failed to fetch profile: ${profileError.message}`);
+        }
+        if (profileData) setProfile(profileData);
+
+        const { data: ordersData, error: ordersError } = ordersRes;
+        if (ordersError) {
+          throw new Error(`Failed to fetch orders: ${ordersError.message}`);
+        }
+        setOrders(ordersData || []);
+
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+        setProfileError(error instanceof Error ? error.message : "An unknown error occurred.");
+      } finally {
+        setLoading(false); // Stop loading regardless of outcome
+      }
+    };
+
+    fetchUserData();
   }, [user, authLoading]); // Depend on user and authLoading
 
   const handleProfileUpdate = async (e: React.FormEvent) => {
