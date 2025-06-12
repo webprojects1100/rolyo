@@ -42,51 +42,55 @@ export default function UserDashboard() {
   const [isEditingProfile, setIsEditingProfile] = useState(false);
 
   useEffect(() => {
-    // A single effect to handle all data loading for the authenticated user.
-    // It runs when authLoading completes or the user object changes.
-    if (authLoading) {
-      setLoading(true);
-      return;
-    }
-
+    // This new effect is simpler and more robust.
+    // It triggers ONLY when the user object itself changes.
     if (user) {
-      setLoading(true);
-      Promise.all([
-        // Fetch profile
-        supabase
-          .from('profiles')
-          .select('name, address, phone, postalCode')
-          .eq('id', user.id)
-          .single(),
-        // Fetch orders
-        supabase
-          .from("orders")
-          .select("id, created_at, status")
-          .eq('user_id', user.id)
-          .order("created_at", { ascending: false })
-      ]).then(([{ data: profileData, error: profileError }, { data: ordersData, error: ordersError }]) => {
-        if (profileError && profileError.code !== 'PGRST116') {
-          console.error('Error fetching profile:', profileError);
-          setProfileError('Could not load profile data.');
-        } else if (profileData) {
-          setProfile(profileData);
-        }
+      setLoading(true); // Start loading when we have a user
+      
+      const fetchUserData = async () => {
+        try {
+          const [profileRes, ordersRes] = await Promise.all([
+            supabase
+              .from('profiles')
+              .select('name, address, phone, postalCode')
+              .eq('id', user.id)
+              .single(),
+            supabase
+              .from("orders")
+              .select("id, created_at, status")
+              .eq('user_id', user.id)
+              .order("created_at", { ascending: false })
+          ]);
 
-        if (ordersError) {
-          console.error('Error fetching orders:', ordersError);
-        } else {
+          const { data: profileData, error: profileError } = profileRes;
+          if (profileError && profileError.code !== 'PGRST116') {
+            throw new Error(`Failed to fetch profile: ${profileError.message}`);
+          }
+          if (profileData) setProfile(profileData);
+
+          const { data: ordersData, error: ordersError } = ordersRes;
+          if (ordersError) {
+            throw new Error(`Failed to fetch orders: ${ordersError.message}`);
+          }
           setOrders(ordersData || []);
+
+        } catch (error) {
+          console.error("Error fetching user data:", error);
+          setProfileError(error instanceof Error ? error.message : "An unknown error occurred.");
+        } finally {
+          setLoading(false); // Stop loading regardless of outcome
         }
-      }).finally(() => {
-        setLoading(false);
-      });
-    } else {
-      // If no user and auth is not loading, we are done.
+      };
+
+      fetchUserData();
+
+    } else if (!authLoading) {
+      // If there's no user and auth is finished, we're not loading.
       setLoading(false);
       setOrders([]);
       setProfile({ name: null, address: null, phone: null, postalCode: null });
     }
-  }, [user, authLoading]);
+  }, [user, authLoading]); // Depend on user and authLoading
 
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
