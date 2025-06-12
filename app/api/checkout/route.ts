@@ -8,14 +8,6 @@ import { CheckoutSchema, ShippingSchema, CartItemSchema } from '@/schemas/checko
 type CartItem = z.infer<typeof CartItemSchema>;
 type ShippingInfo = z.infer<typeof ShippingSchema>;
 
-interface OrderPayload {
-  shipping: ShippingInfo;
-  items: CartItem[];
-  created_at: string;
-  status: string;
-  user_id?: string;
-}
-
 export async function POST(req: NextRequest) {
   const cookieStore = cookies();
   const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
@@ -71,16 +63,13 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const orderPayload: OrderPayload = {
+  const orderPayload = {
     shipping,
     items: cart,
     created_at: new Date().toISOString(),
     status: 'pending',
+    user_id: user.id,
   };
-
-  if (user) {
-    orderPayload.user_id = user.id;
-  }
 
   const { data: orderData, error: orderError } = await supabase
     .from('orders')
