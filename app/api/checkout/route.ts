@@ -64,11 +64,14 @@ export async function POST(req: NextRequest) {
   }
 
   const orderPayload = {
-    shipping,
-    items: cart,
-    created_at: new Date().toISOString(),
-    status: 'pending',
     user_id: user.id,
+    status: 'pending',
+    created_at: new Date().toISOString(),
+    items: cart,
+    shipping_name: shipping.name,
+    shipping_address: shipping.address,
+    shipping_phone: shipping.phone,
+    shipping_postal_code: shipping.postalCode,
   };
 
   const { data: orderData, error: orderError } = await supabase
