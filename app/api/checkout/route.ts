@@ -55,15 +55,16 @@ export async function POST(req: NextRequest) {
   }
 
   for (const item of cart) {
-    // Validate stock using the unique variant ID
+    const variantIdentifier = item.variantId ?? item.id!;
+    // Validate stock using unique variant identifier
     const { data: variantRecord, error: stockError } = await supabase
       .from('product_variants')
       .select('stock')
-      .eq('id', item.variantId) // Use variantId from the cart item
+      .eq('id', variantIdentifier)
       .single();
 
     if (stockError || !variantRecord) {
-      console.error(`Stock validation error for ${item.name} (${item.size}, Variant: ${item.variantId}):`, stockError);
+      console.error(`Stock validation error for ${item.name} (${item.size}, Variant: ${variantIdentifier}):`, stockError);
       return NextResponse.json({ error: `Could not validate stock for ${item.name} (${item.size})` }, { status: 400 });
     }
 
@@ -96,10 +97,11 @@ export async function POST(req: NextRequest) {
   }
 
   for (const item of cart) {
+    const variantIdentifier = item.variantId ?? item.id!;
     const { data: variantRecord, error: fetchError } = await supabase
       .from('product_variants')
       .select('stock')
-      .eq('id', item.variantId)
+      .eq('id', variantIdentifier)
       .single();
 
     if (!fetchError && variantRecord) {
@@ -107,12 +109,12 @@ export async function POST(req: NextRequest) {
       const { error: stockUpdateError } = await supabase
         .from('product_variants')
         .update({ stock: newStock })
-        .eq('id', item.variantId);
+        .eq('id', variantIdentifier);
       
       if (stockUpdateError) {
         // Log the error but don't fail the entire order, as the payment has already been processed.
         // This should be handled by a reconciliation process.
-        console.error(`Failed to update stock for ${item.name} (${item.size}, Variant: ${item.variantId}):`, stockUpdateError);
+        console.error(`Failed to update stock for ${item.name} (${item.size}, Variant: ${variantIdentifier}):`, stockUpdateError);
       }
     }
   }
