@@ -6,18 +6,27 @@ export class CheckoutService {
   async createOrder(checkoutData: { user: { id: string }, cart: CartItem[] }) {
     const totalAmount = this.calculateTotalAmount(checkoutData.cart);
 
-    // Start a transaction
-    const { data: order, error: orderError } = await supabase.rpc('create_order_with_items', {
-      order_data: {
-        user_id: checkoutData.user.id,
-        status: 'pending',
-        shipping_address: {},
-        billing_address: {},
-        total_amount: totalAmount,
-        payment_method: 'pending',
-        payment_status: 'pending'
-      },
-      items: checkoutData.cart.map(item => ({
+    try {
+      // First create the order
+      const { data: order, error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          user_id: checkoutData.user.id,
+          status: 'pending',
+          shipping_address: {},
+          billing_address: {},
+          total_amount: totalAmount,
+          payment_method: 'pending',
+          payment_status: 'pending'
+        })
+        .select()
+        .single();
+
+      if (orderError) throw orderError;
+
+      // Then create order items
+      const orderItems = checkoutData.cart.map(item => ({
+        order_id: order.id,
         product_id: item.productId,
         variant_id: item.variantId,
         name: item.name,
@@ -26,15 +35,19 @@ export class CheckoutService {
         size: item.size,
         color_name: item.color,
         image_url: item.imageUrl
-      }))
-    });
+      }));
 
-    if (orderError) {
-      console.error('Order creation error:', orderError);
-      throw new Error(`Failed to create order: ${orderError.message}`);
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .insert(orderItems);
+
+      if (itemsError) throw itemsError;
+
+      return order;
+    } catch (error) {
+      console.error('Error creating order:', error);
+      throw new Error('Failed to save order. Please try again.');
     }
-
-    return order;
   }
 
   private calculateTotalAmount(cart: CartItem[]) {
