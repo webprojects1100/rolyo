@@ -1,6 +1,9 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+// Using Supabase client directly for auth
+import { supabase } from '@/lib/supabase';
+import { CartService } from '@/services/cartService';
 
 export interface CartItem {
   variantId: string;
@@ -16,10 +19,11 @@ export interface CartItem {
 
 interface CartContextType {
   cart: CartItem[];
-  addToCart: (item: CartItem) => void;
-  removeFromCart: (variantId: string) => void;
-  updateQuantity: (variantId: string, quantity: number) => void;
-  clearCart: () => void;
+  isLoading: boolean;
+  addToCart: (item: CartItem) => Promise<void>;
+  removeFromCart: (variantId: string) => Promise<void>;
+  updateQuantity: (variantId: string, quantity: number) => Promise<void>;
+  clearCart: () => Promise<void>;
   totalItems: number;
 }
 
@@ -27,52 +31,141 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
 
+  // Get current user ID from Supabase
   useEffect(() => {
-    const stored = localStorage.getItem("cart");
-    if (stored) setCart(JSON.parse(stored));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      setUserId(session?.user?.id || null);
+    });
+
+    // Set initial user
+    const getInitialUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUserId(user?.id || null);
+    };
+    getInitialUser();
+
+    return () => {
+      if (subscription) {
+        subscription.unsubscribe();
+      }
+    };
   }, []);
 
+  // Load cart from localStorage or database
   useEffect(() => {
-    localStorage.setItem("cart", JSON.stringify(cart));
-  }, [cart]);
-
-  const addToCart = (itemToAdd: CartItem) => {
-    setCart((prev) => {
-      const existing = prev.find((i) => i.variantId === itemToAdd.variantId);
-      if (existing) {
-        return prev.map((i) =>
-          i.variantId === itemToAdd.variantId
-            ? { ...i, quantity: i.quantity + itemToAdd.quantity }
-            : i
-        );
-      } else {
-        return [...prev, itemToAdd];
+    const loadCart = async () => {
+      try {
+        if (userId) {
+          // Load from database if user is logged in
+          const dbCart = await CartService.getCart(userId);
+          setCart(dbCart);
+          // Save to localStorage for offline access
+          localStorage.setItem("cart", JSON.stringify(dbCart));
+        } else {
+          // Load from localStorage if not logged in
+          const stored = localStorage.getItem("cart");
+          if (stored) {
+            setCart(JSON.parse(stored));
+          }
+        }
+      } catch (error) {
+        console.error('Error loading cart:', error);
+        // Fallback to localStorage if database fails
+        const stored = localStorage.getItem("cart");
+        if (stored) {
+          setCart(JSON.parse(stored));
+        }
+      } finally {
+        setIsLoading(false);
       }
-    });
+    };
+
+    loadCart();
+  }, [userId]);
+
+  // Save cart to localStorage and database
+  const saveCart = async (newCart: CartItem[]) => {
+    // Always save to localStorage for immediate UI update
+    localStorage.setItem("cart", JSON.stringify(newCart));
+    
+    // Save to database if user is logged in
+    if (userId) {
+      try {
+        await CartService.syncCart(userId, newCart);
+      } catch (error) {
+        console.error('Error saving cart:', error);
+        throw error;
+      }
+    }
   };
 
-  const removeFromCart = (variantId: string) => {
-    setCart((prev) => prev.filter((item) => item.variantId !== variantId));
+  const addToCart = async (itemToAdd: CartItem) => {
+    const newCart = [...cart];
+    const existingIndex = newCart.findIndex(i => i.variantId === itemToAdd.variantId);
+    
+    if (existingIndex >= 0) {
+      // Update existing item
+      newCart[existingIndex] = {
+        ...newCart[existingIndex],
+        quantity: newCart[existingIndex].quantity + itemToAdd.quantity
+      };
+    } else {
+      // Add new item
+      newCart.push(itemToAdd);
+    }
+    
+    setCart(newCart);
+    await saveCart(newCart);
   };
 
-  const updateQuantity = (variantId: string, quantity: number) => {
-    setCart((prev) =>
-      prev.map((item) =>
-        item.variantId === variantId ? { ...item, quantity: Math.max(0, quantity) } : item
-      ).filter(item => item.quantity > 0)
-    );
+  const removeFromCart = async (variantId: string) => {
+    const newCart = cart.filter(item => item.variantId !== variantId);
+    setCart(newCart);
+    await saveCart(newCart);
   };
 
-  const clearCart = () => {
+  const updateQuantity = async (variantId: string, quantity: number) => {
+    const newCart = cart
+      .map(item => 
+        item.variantId === variantId 
+          ? { ...item, quantity: Math.max(0, quantity) } 
+          : item
+      )
+      .filter(item => item.quantity > 0);
+      
+    setCart(newCart);
+    await saveCart(newCart);
+  };
+
+  const clearCart = async () => {
     setCart([]);
     localStorage.removeItem("cart");
+    if (userId) {
+      try {
+        await CartService.syncCart(userId, []);
+      } catch (error) {
+        console.error('Error clearing cart:', error);
+      }
+    }
   };
   
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
+  const value = {
+    cart,
+    isLoading,
+    addToCart,
+    removeFromCart,
+    updateQuantity,
+    clearCart,
+    totalItems
+  };
+
   return (
-    <CartContext.Provider value={{ cart, totalItems, addToCart, removeFromCart, updateQuantity, clearCart }}>
+    <CartContext.Provider value={value}>
       {children}
     </CartContext.Provider>
   );
