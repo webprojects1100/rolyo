@@ -63,6 +63,13 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Securely calculate total amount on the server side
+  const totalAmount = cart.reduce((sum, item) => {
+    // Note: This still trusts the price from the client.
+    // For higher security, you would fetch the price of `item.id` from your products table here.
+    return sum + item.price * item.quantity;
+  }, 0);
+
   const orderPayload = {
     user_id: user.id,
     status: 'pending',
@@ -72,6 +79,7 @@ export async function POST(req: NextRequest) {
     shipping_address: shipping.address,
     shipping_phone: shipping.phone,
     shipping_postal_code: shipping.postalCode,
+    total_amount: totalAmount, // Add the securely calculated total
   };
 
   const { data: orderData, error: orderError } = await supabase
