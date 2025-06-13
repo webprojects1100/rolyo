@@ -19,6 +19,7 @@ export default function CheckoutPage() {
   const [error, setError] = useState<string | null>(null);
   const { user, loading: authLoading } = useAuth();
   const [profileLoading, setProfileLoading] = useState(true);
+  const [isProfileComplete, setIsProfileComplete] = useState(false);
 
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
@@ -38,26 +39,36 @@ export default function CheckoutPage() {
         .then(
           ({ data: profileData, error: profileError }) => {
             if (profileData) {
-              setShipping(prev => ({
-                ...prev,
-                name: profileData.name || '',
-                address: profileData.address || '',
-                phone: profileData.phone || '',
-                postalCode: profileData.postalCode || '',
-              }));
+              const { name, address, phone, postalCode } = profileData;
+              setShipping({
+                name: name || '',
+                address: address || '',
+                phone: phone || '',
+                postalCode: postalCode || '',
+              });
+              if (name && address && phone && postalCode) {
+                setIsProfileComplete(true);
+              } else {
+                setIsProfileComplete(false);
+              }
+            } else {
+              setIsProfileComplete(false);
             }
             if (profileError && profileError.code !== 'PGRST116') {
               console.error("Error fetching profile for checkout:", profileError);
+              setError("Could not load your profile. Please try again.");
             }
             setProfileLoading(false);
           },
           (error) => {
             console.error("Unhandled promise rejection:", error);
+            setError("Could not load your profile. Please try again.");
             setProfileLoading(false);
           }
         );
     } else {
       setProfileLoading(false);
+      setIsProfileComplete(false);
     }
   }, [user, authLoading]);
 
@@ -116,10 +127,10 @@ export default function CheckoutPage() {
           <div>Loading shipping information...</div>
         ) : (
           <div className="flex flex-col gap-3">
-            <input name="name" value={shipping.name} onChange={handleInput} placeholder="Full Name" className="border rounded px-3 py-2" required />
-            <input name="address" value={shipping.address} onChange={handleInput} placeholder="Address" className="border rounded px-3 py-2" required />
-            <input name="postalCode" value={shipping.postalCode} onChange={handleInput} placeholder="Postal Code" className="border rounded px-3 py-2" required />
-            <input name="phone" value={shipping.phone} onChange={handleInput} placeholder="Phone Number" className="border rounded px-3 py-2" required />
+            <input name="name" value={shipping.name} onChange={handleInput} placeholder="Full Name" className="border rounded px-3 py-2 bg-gray-100" required readOnly />
+            <input name="address" value={shipping.address} onChange={handleInput} placeholder="Address" className="border rounded px-3 py-2 bg-gray-100" required readOnly />
+            <input name="postalCode" value={shipping.postalCode} onChange={handleInput} placeholder="Postal Code" className="border rounded px-3 py-2 bg-gray-100" required readOnly />
+            <input name="phone" value={shipping.phone} onChange={handleInput} placeholder="Phone Number" className="border rounded px-3 py-2 bg-gray-100" required readOnly />
           </div>
         )}
       </div>
@@ -146,10 +157,19 @@ export default function CheckoutPage() {
           </div>
         )}
       </div>
+
+      {!isProfileComplete && !profileLoading && user && (
+        <div className="mb-4 text-red-600 p-3 bg-red-50 border border-red-200 rounded-lg">
+          Your profile is incomplete. Please go to your{" "}
+          <Link href="/account" className="font-bold underline">account page</Link>
+          {" "}to fill in your shipping information before placing an order.
+        </div>
+      )}
+
       <button
         className="bg-black text-white px-6 py-2 rounded-xl w-full disabled:opacity-60"
         onClick={handlePlaceOrder}
-        disabled={profileLoading || authLoading || placingOrder || cart.length === 0 || !shipping.name || !shipping.address || !shipping.phone || !shipping.postalCode}
+        disabled={profileLoading || authLoading || placingOrder || cart.length === 0 || !isProfileComplete}
       >
         {placingOrder ? "Placing Order..." : "Place Order"}
       </button>
