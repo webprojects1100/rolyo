@@ -82,7 +82,10 @@ export default function CheckoutPage() {
     try {
       const res = await fetch("/api/checkout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
         body: JSON.stringify({ cart, shipping, user }),
       });
       const result = await res.json();
