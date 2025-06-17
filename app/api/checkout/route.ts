@@ -63,13 +63,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Securely calculate total amount on the server side
-  const totalAmount = cart.reduce((sum, item) => {
-    // Note: This still trusts the price from the client.
-    // For higher security, you would fetch the price of `item.id` from your products table here.
-    return sum + item.price * item.quantity;
-  }, 0);
-
   // FIX: Match the orders table schema (shipping, items as JSONB)
   const orderPayload = {
     shipping, // as JSONB
