@@ -28,14 +28,19 @@ export default function CheckoutPage() {
       setProfileLoading(true);
       return;
     }
-
+    // Wait for authLoading to be false and user to be defined/null
+    if (typeof authLoading === 'boolean' && !authLoading && !user) {
+      setProfileLoading(false);
+      setIsProfileComplete(false);
+      return;
+    }
     if (user) {
       setProfileLoading(true);
       supabase
         .from('profiles')
         .select('name, address, phone, postalCode')
         .eq('id', user.id)
-        .single()
+        .maybeSingle()
         .then(
           ({ data: profileData, error: profileError }) => {
             if (profileData) {
@@ -66,9 +71,6 @@ export default function CheckoutPage() {
             setProfileLoading(false);
           }
         );
-    } else {
-      setProfileLoading(false);
-      setIsProfileComplete(false);
     }
   }, [user, authLoading]);
 
