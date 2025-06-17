@@ -70,16 +70,16 @@ export async function POST(req: NextRequest) {
     return sum + item.price * item.quantity;
   }, 0);
 
+  // FIX: Match the orders table schema (shipping, items as JSONB)
   const orderPayload = {
-    user_id: user.id,
-    status: 'pending',
+    shipping, // as JSONB
+    items: cart, // as JSONB
     created_at: new Date().toISOString(),
-    items: cart,
-    shipping_name: shipping.name,
-    shipping_address: shipping.address,
-    shipping_phone: shipping.phone,
-    shipping_postal_code: shipping.postalCode,
-    total_amount: totalAmount, // Add the securely calculated total
+    status: 'pending',
+    // Optionally add user_id if you add it to your schema
+    // user_id: user.id,
+    // Optionally add total_amount if you add it to your schema
+    // total_amount: totalAmount,
   };
 
   const { data: orderData, error: orderError } = await supabase
