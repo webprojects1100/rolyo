@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
     .from('orders')
     .insert([orderPayload])
     .select()
-    .single();
+    .maybeSingle();
 
   if (orderError) {
     console.error("Supabase order insert error:", orderError);
