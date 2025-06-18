@@ -78,8 +78,42 @@ create table if not exists profiles (
   created_at timestamp with time zone default now()
 );
 
+-- Product Variants table — Each row is a unique combination of product, color, and size
+create table if not exists product_variants (
+  id uuid primary key default uuid_generate_v4(),
+  product_id uuid references products(id) on delete cascade,
+  color text not null, -- e.g., 'Black', 'White', etc.
+  size text check (size in ('S', 'M', 'L', 'XL', 'XXL', 'XXXL')) not null,
+  stock integer not null check (stock >= 0),
+  image_url text, -- optional: image for this variant
+  unique (product_id, color, size)
+);
+
+-- Cart Items table — Each user's cart can have multiple items, each referencing a variant
+create table if not exists cart_items (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null, -- Supabase Auth UID
+  variant_id uuid references product_variants(id) on delete cascade,
+  quantity integer not null check (quantity > 0),
+  created_at timestamp with time zone default now(),
+  unique (user_id, variant_id)
+);
+
+-- Order Items table — Each order can have multiple items, each referencing a variant
+create table if not exists order_items (
+  id uuid primary key default uuid_generate_v4(),
+  order_id uuid references orders(id) on delete cascade,
+  variant_id uuid references product_variants(id) on delete cascade,
+  product_id uuid references products(id) on delete cascade,
+  name text not null, -- product name at time of order
+  color text not null,
+  size text not null,
+  price numeric(10, 2) not null, -- price at time of order
+  quantity integer not null check (quantity > 0),
+  image_url text, -- image at time of order
+  created_at timestamp with time zone default now()
+);
+
 -- Reload Supabase schema cache
 NOTIFY pgrst, 'reload schema';
-
-
 
