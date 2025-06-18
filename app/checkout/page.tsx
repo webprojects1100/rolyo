@@ -36,6 +36,7 @@ export default function CheckoutPage() {
     }
     if (user) {
       setProfileLoading(true);
+      console.log(`Fetching profile for user: ${user.id}`);
       supabase
         .from('profiles')
         .select('name, address, phone, postalCode')
@@ -43,7 +44,22 @@ export default function CheckoutPage() {
         .maybeSingle()
         .then(
           ({ data: profileData, error: profileError }) => {
+            if (profileError) {
+              console.log("Profile fetch error:", profileError);
+              if (profileError.code === 'PGRST116') {
+                console.log("No profile found - this is normal for new users");
+                // No profile exists yet - this is expected for new users
+                setIsProfileComplete(false);
+              } else {
+                console.error("Error fetching profile for checkout:", profileError);
+                setError("Could not load your profile. Please try again.");
+              }
+              setProfileLoading(false);
+              return;
+            }
+            
             if (profileData) {
+              console.log("Profile data found:", profileData);
               const { name, address, phone, postalCode } = profileData;
               setShipping({
                 name: name || '',
@@ -51,18 +67,19 @@ export default function CheckoutPage() {
                 phone: phone || '',
                 postalCode: postalCode || '',
               });
+              
+              // Check if all required fields are completed
               if (name && address && phone && postalCode) {
                 setIsProfileComplete(true);
               } else {
+                console.log("Profile incomplete - missing required fields");
                 setIsProfileComplete(false);
               }
             } else {
+              console.log("No profile data found for user");
               setIsProfileComplete(false);
             }
-            if (profileError && profileError.code !== 'PGRST116') {
-              console.error("Error fetching profile for checkout:", profileError);
-              setError("Could not load your profile. Please try again.");
-            }
+            
             setProfileLoading(false);
           },
           (error) => {
@@ -82,6 +99,12 @@ export default function CheckoutPage() {
     setPlacingOrder(true);
     setError(null);
     try {
+      console.log("Placing order with data:", {
+        cartItemCount: cart.length,
+        shipping,
+        userId: user?.id
+      });
+      
       const res = await fetch("/api/checkout", {
         method: "POST",
         headers: {
@@ -90,8 +113,12 @@ export default function CheckoutPage() {
         },
         body: JSON.stringify({ cart, shipping, user }),
       });
+      
       const result = await res.json();
+      console.log("Checkout API response:", result);
+      
       if (!res.ok) {
+        console.error("Order failed:", result.error);
         setError(result.error || "Order failed. Please try again.");
         setPlacingOrder(false);
         return;
