@@ -46,3 +46,12 @@ export function isValidUrl(url: string): boolean {
     return false;
   }
 }
+
+// Debug utility for Supabase errors
+export function logSupabaseError(error: unknown, label: string) {
+  if (error) {
+    // Add a timestamp and label for easier tracing
+    const time = new Date().toISOString();
+    console.error(`[SUPABASE DEBUG][${label}][${time}]`, error);
+  }
+}
