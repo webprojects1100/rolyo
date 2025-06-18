@@ -47,15 +47,24 @@ export async function POST(req: NextRequest) {
   for (const item of cart) {
     const variantIdentifier = item.variantId ?? item.id!;
     // Validate stock using unique variant identifier
+    console.log(`Checking stock for variant ID: ${variantIdentifier}`);
     const { data: variantRecord, error: stockError } = await supabase
       .from('product_variants')
       .select('stock')
       .eq('id', variantIdentifier)
       .single();
 
-    if (stockError || !variantRecord) {
+    if (stockError) {
       console.error(`Stock validation error for ${item.name} (${item.size}, Variant: ${variantIdentifier}):`, stockError);
+      if (stockError.code === 'PGRST116') {
+        console.error(`No product variant found with ID: ${variantIdentifier}`);
+        return NextResponse.json({ error: `Product variant not found for ${item.name} (${item.size})` }, { status: 400 });
+      }
       return NextResponse.json({ error: `Could not validate stock for ${item.name} (${item.size})` }, { status: 400 });
+    }
+    if (!variantRecord) {
+      console.error(`No stock information found for variant: ${variantIdentifier}`);
+      return NextResponse.json({ error: `No stock information for ${item.name} (${item.size})` }, { status: 400 });
     }
 
     if (item.quantity > variantRecord.stock) {
@@ -75,15 +84,34 @@ export async function POST(req: NextRequest) {
     // total_amount: totalAmount,
   };
 
+  console.log("Inserting order with payload:", JSON.stringify(orderPayload));
   const { data: orderData, error: orderError } = await supabase
     .from('orders')
     .insert([orderPayload])
     .select()
     .maybeSingle();
 
+  // Variable to store the order ID, either from the initial response or fallback query
+  let finalOrderId = orderData?.id;
+
   if (orderError) {
     console.error("Supabase order insert error:", orderError);
-    return NextResponse.json({ error: 'Failed to save order.', details: orderError.message }, { status: 500 });
+    if (orderError.code === 'PGRST116') {
+      console.error("Order was created but no data was returned. This may be due to RLS policies.");
+      // Attempt to retrieve the created order ID through a separate query
+      const { data: lastOrder } = await supabase
+        .from('orders')
+        .select('id')
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (lastOrder && lastOrder.length > 0) {
+        finalOrderId = lastOrder[0].id;
+      } else {
+        return NextResponse.json({ error: 'Order was created but ID could not be retrieved.' }, { status: 500 });
+      }
+    } else {
+      return NextResponse.json({ error: 'Failed to save order.', details: orderError.message }, { status: 500 });
+    }
   }
 
   for (const item of cart) {
@@ -109,5 +137,5 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ success: true, orderId: orderData?.id });
+  return NextResponse.json({ success: true, orderId: finalOrderId });
 }
