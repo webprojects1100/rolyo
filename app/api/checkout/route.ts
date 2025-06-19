@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
       .from('product_variants')
       .select('stock')
       .eq('id', variantIdentifier)
-      .maybeSingle();
+      .single();
 
     if (stockError) {
       console.error(`Stock validation error for ${item.name} (${item.size}, Variant: ${variantIdentifier}):`, stockError);
@@ -62,6 +62,7 @@ export async function POST(req: NextRequest) {
       }
       return NextResponse.json({ error: `Could not validate stock for ${item.name} (${item.size})` }, { status: 400 });
     }
+
     if (!variantRecord) {
       console.error(`No stock information found for variant: ${variantIdentifier}`);
       return NextResponse.json({ error: `No stock information for ${item.name} (${item.size})` }, { status: 400 });
@@ -126,7 +127,7 @@ export async function POST(req: NextRequest) {
       .from('product_variants')
       .select('stock')
       .eq('id', variantIdentifier)
-      .single();
+      .maybeSingle();
 
     if (!fetchError && variantRecord) {
       const newStock = variantRecord.stock - item.quantity;
