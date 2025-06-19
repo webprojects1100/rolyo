@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
       .from('product_variants')
       .select('stock')
       .eq('id', variantIdentifier)
-      .single();
+      .maybeSingle();
 
     if (stockError) {
       console.error(`Stock validation error for ${item.name} (${item.size}, Variant: ${variantIdentifier}):`, stockError);
@@ -99,15 +99,21 @@ export async function POST(req: NextRequest) {
     if (orderError.code === 'PGRST116') {
       console.error("Order was created but no data was returned. This may be due to RLS policies.");
       // Attempt to retrieve the created order ID through a separate query
-      const { data: lastOrder } = await supabase
+      const { data: fallbackOrderData, error: fallbackError } = await supabase
         .from('orders')
         .select('id')
-        .order('created_at', { ascending: false })
-        .limit(1);
-      if (lastOrder && lastOrder.length > 0) {
-        finalOrderId = lastOrder[0].id;
-      } else {
-        return NextResponse.json({ error: 'Order was created but ID could not be retrieved.' }, { status: 500 });
+        .eq('created_at', orderPayload.created_at)
+        .maybeSingle();
+
+      if (fallbackError) {
+        console.error("Fallback query error:", fallbackError);
+        return NextResponse.json({ error: "Order creation failed and fallback query also failed." }, { status: 500 });
+      }
+
+      finalOrderId = fallbackOrderData?.id;
+      if (!finalOrderId) {
+        console.error("Fallback query did not return an order ID.");
+        return NextResponse.json({ error: "Order creation failed and no order ID was found." }, { status: 500 });
       }
     } else {
       return NextResponse.json({ error: 'Failed to save order.', details: orderError.message }, { status: 500 });
