@@ -56,18 +56,22 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   // Load cart from localStorage or database
   useEffect(() => {
+    let didCancel = false;
     const loadCart = async () => {
+      setIsLoading(true);
       try {
         if (userId) {
           // Load from database if user is logged in
           const dbCart = await CartService.getCart(userId);
-          setCart(dbCart);
-          // Save to localStorage for offline access
-          localStorage.setItem("cart", JSON.stringify(dbCart));
+          if (!didCancel) {
+            setCart(dbCart);
+            // Save to localStorage for offline access
+            localStorage.setItem("cart", JSON.stringify(dbCart));
+          }
         } else {
           // Load from localStorage if not logged in
           const stored = localStorage.getItem("cart");
-          if (stored) {
+          if (stored && !didCancel) {
             setCart(JSON.parse(stored));
           }
         }
@@ -75,22 +79,21 @@ export function CartProvider({ children }: { children: ReactNode }) {
         console.error('Error loading cart:', error);
         // Fallback to localStorage if database fails
         const stored = localStorage.getItem("cart");
-        if (stored) {
+        if (stored && !didCancel) {
           setCart(JSON.parse(stored));
         }
       } finally {
-        setIsLoading(false);
+        if (!didCancel) setIsLoading(false);
       }
     };
-
     loadCart();
+    return () => { didCancel = true; };
   }, [userId]);
 
   // Save cart to localStorage and database
   const saveCart = async (newCart: CartItem[]) => {
     // Always save to localStorage for immediate UI update
     localStorage.setItem("cart", JSON.stringify(newCart));
-    
     // Save to database if user is logged in
     if (userId) {
       try {
@@ -105,7 +108,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const addToCart = async (itemToAdd: CartItem) => {
     const newCart = [...cart];
     const existingIndex = newCart.findIndex(i => i.variantId === itemToAdd.variantId);
-    
     if (existingIndex >= 0) {
       // Update existing item
       newCart[existingIndex] = {
@@ -116,7 +118,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
       // Add new item
       newCart.push(itemToAdd);
     }
-    
     setCart(newCart);
     await saveCart(newCart);
   };
@@ -135,7 +136,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
           : item
       )
       .filter(item => item.quantity > 0);
-      
     setCart(newCart);
     await saveCart(newCart);
   };
@@ -151,7 +151,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       }
     }
   };
-  
+
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const value = {
