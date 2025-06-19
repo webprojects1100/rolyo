@@ -4,7 +4,15 @@ import Image from "next/image";
 import Link from "next/link";
 
 export default function CartPage() {
-  const { cart, removeFromCart, updateQuantity, totalItems } = useCart();
+  const { cart, removeFromCart, updateQuantity, totalItems, isLoading } = useCart();
+
+  if (isLoading) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-10 min-h-[70vh] flex items-center justify-center">
+        <div className="text-gray-500 text-lg">Loading your cart...</div>
+      </div>
+    );
+  }
 
   // The handler now only needs the variantId
   const handleRemove = (variantId: string) => {
